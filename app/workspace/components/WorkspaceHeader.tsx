@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useAuth } from "../../../lib/auth/AuthContext";
 
 interface WorkspaceHeaderProps {
   onOpenAddModal: () => void;
@@ -15,6 +16,7 @@ export default function WorkspaceHeader({
   searchQuery,
   setSearchQuery,
 }: WorkspaceHeaderProps) {
+  const { user, userProfile } = useAuth();
   return (
     <header className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-[#0c0e13]/85 backdrop-blur-xl border-b border-outline-variant/30 z-40 flex items-center justify-between px-4 sm:px-6">
       {/* Mobile Toggle + Search Box */}
@@ -79,8 +81,12 @@ export default function WorkspaceHeader({
         {/* User Avatar */}
         <div className="flex items-center pl-1">
           <Image
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhiT-fS94BgDyhLpMJDlYKntQwDTUm9GXRHoiVTosSsB4dJcFlgij98ihCIA9eKt4Daqmt9AkiE0ly81jiXp5M6Dkn-fdqXxDh4fPTqH--D47WprzLQh2giEixqyAfOE4ZgDWE4h-rdqj9xSrFPAiyIgZrygAKd8SnJd7o53Rv4wtTqCertqG-fVNtRjNzvCfAduj-ZphmsOI8FXpM_acjUFkqhLVJxIjXT_TYDk2UCe-3HLHmYX8k"
-            alt="Profile"
+            src={
+              userProfile?.photoURL ||
+              user?.photoURL ||
+              "https://lh3.googleusercontent.com/aida-public/AB6AXuBhiT-fS94BgDyhLpMJDlYKntQwDTUm9GXRHoiVTosSsB4dJcFlgij98ihCIA9eKt4Daqmt9AkiE0ly81jiXp5M6Dkn-fdqXxDh4fPTqH--D47WprzLQh2giEixqyAfOE4ZgDWE4h-rdqj9xSrFPAiyIgZrygAKd8SnJd7o53Rv4wtTqCertqG-fVNtRjNzvCfAduj-ZphmsOI8FXpM_acjUFkqhLVJxIjXT_TYDk2UCe-3HLHmYX8k"
+            }
+            alt={user?.displayName || "Profile"}
             width={32}
             height={32}
             className="w-8 h-8 rounded-full object-cover ring-1 ring-outline-variant/40"

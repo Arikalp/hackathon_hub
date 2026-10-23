@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Unique Usernames collection: Anyone can read to check availability; Authenticated user can reserve
+    match /usernames/{username} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+    }
+
+    // User profiles: Public or authenticated read; Owner can edit their own profile
+    match /users/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+      
+      // User in-app notifications
+      match /notifications/{notificationId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Teams collection
+    match /teams/{teamId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null;
+
+      // Subcollection for team members
+      match /members/{memberUid} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+
+      // Subcollection for team hackathons
+      match /hackathons/{hackathonId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+    }
+
+    // Team invitations
+    match /teamInvitations/{invitationId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Default fallback for development
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

@@ -164,7 +164,7 @@ export default function Hero() {
                     </span>
                     <div className="flex items-center gap-1 font-mono text-sm sm:text-base font-bold text-secondary bg-surface-container-lowest/80 px-2 py-1 rounded border border-secondary/20">
                       <span className="w-2 h-2 rounded-full bg-secondary animate-ping mr-1"></span>
-                      <span>
+                      <span suppressHydrationWarning>
                         {formatUnit(timeLeft.days)}d {formatUnit(timeLeft.hours)}h{" "}
                         {formatUnit(timeLeft.minutes)}m {formatUnit(timeLeft.seconds)}s
                       </span>
