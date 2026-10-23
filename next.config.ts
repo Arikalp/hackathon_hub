@@ -4,6 +4,14 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+    ],
+  },
   turbopack: {
     rules: {
       "*.css": {
@@ -15,3 +23,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
