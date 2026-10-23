@@ -80,7 +80,7 @@ export default function Hero() {
           {/* CTA Cluster */}
           <div className="flex flex-wrap items-center gap-4 pt-2">
             <Link
-              href="/register"
+              href="/workspace"
               className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-primary-container text-on-primary-container text-base font-semibold hover:bg-primary hover:text-on-primary transition-all duration-200 shadow-[0_0_24px_-4px_rgba(160,120,255,0.6)] hover:shadow-[0_0_32px_-2px_rgba(160,120,255,0.85)] group cursor-pointer"
             >
               <span>Start Your Team</span>
@@ -88,15 +88,15 @@ export default function Hero() {
                 arrow_forward
               </span>
             </Link>
-            <a
-              href="#discover"
+            <Link
+              href="/workspace"
               className="inline-flex items-center gap-2 px-5 py-3.5 rounded-xl bg-surface-container-high text-on-surface text-base font-medium hover:bg-surface-bright transition-all duration-200 border border-outline-variant/30"
             >
               <span className="material-symbols-outlined text-primary text-xl">
                 explore
               </span>
               <span>Explore Platform</span>
-            </a>
+            </Link>
           </div>
 
           {/* Micro Metadata Tagging */}

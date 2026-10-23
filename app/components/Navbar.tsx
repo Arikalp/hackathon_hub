@@ -37,12 +37,13 @@ export default function Navbar() {
           >
             Discover
           </a>
-          <a
-            href="#teams"
-            className="text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+          <Link
+            href="/workspace"
+            className="text-sm text-primary font-medium hover:text-on-surface transition-colors flex items-center gap-1"
           >
-            Teams
-          </a>
+            <span className="material-symbols-outlined text-[16px]">dashboard</span>
+            <span>Workspace</span>
+          </Link>
           <a
             href="#features"
             className="text-sm text-on-surface-variant hover:text-on-surface transition-colors"
@@ -60,18 +61,18 @@ export default function Navbar() {
         {/* Right CTA Cluster */}
         <div className="flex items-center gap-3">
           <Link
-            href="/login"
+            href="/workspace"
             className="hidden sm:inline-flex items-center px-3 py-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors font-medium"
           >
-            Sign In
+            Console
           </Link>
           <Link
-            href="/register"
+            href="/workspace"
             className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-primary-container text-on-primary-container text-sm font-semibold hover:bg-primary hover:text-on-primary transition-all duration-200 shadow-[0_0_16px_-2px_rgba(160,120,255,0.4)] hover:shadow-[0_0_24px_-2px_rgba(160,120,255,0.7)]"
           >
-            Get Started
+            Open Workspace
           </Link>
-          <div className="relative group cursor-pointer hidden xs:block">
+          <Link href="/workspace" className="relative group cursor-pointer hidden xs:block">
             <Image
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhiT-fS94BgDyhLpMJDlYKntQwDTUm9GXRHoiVTosSsB4dJcFlgij98ihCIA9eKt4Daqmt9AkiE0ly81jiXp5M6Dkn-fdqXxDh4fPTqH--D47WprzLQh2giEixqyAfOE4ZgDWE4h-rdqj9xSrFPAiyIgZrygAKd8SnJd7o53Rv4wtTqCertqG-fVNtRjNzvCfAduj-ZphmsOI8FXpM_acjUFkqhLVJxIjXT_TYDk2UCe-3HLHmYX8k"
               alt="Profile"
@@ -80,7 +81,7 @@ export default function Navbar() {
               className="w-8 h-8 rounded-full object-cover ring-1 ring-outline-variant/40 group-hover:ring-primary/60 transition-all"
             />
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-secondary rounded-full ring-2 ring-background"></span>
-          </div>
+          </Link>
 
           {/* Mobile Menu Button */}
           <button

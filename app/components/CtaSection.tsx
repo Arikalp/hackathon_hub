@@ -47,7 +47,7 @@ export default function CtaSection() {
         {/* Action Button */}
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
           <Link
-            href="/register"
+            href="/workspace"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-primary-container text-on-primary-container text-base font-bold hover:bg-primary hover:text-on-primary transition-all duration-200 shadow-[0_0_32px_-4px_rgba(160,120,255,0.7)] hover:shadow-[0_0_40px_-2px_rgba(160,120,255,0.9)] cursor-pointer"
           >
             <span>Create Your Free Team</span>
