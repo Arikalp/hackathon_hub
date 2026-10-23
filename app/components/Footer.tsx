@@ -11,7 +11,7 @@ export default function Footer() {
             <Link href="/" className="flex items-center gap-2.5">
               <div className="w-6 h-6 rounded overflow-hidden bg-primary/10 flex items-center justify-center p-0.5">
                 <Image
-                  src="https://lh3.googleusercontent.com/aida/AEtjO1XgcjrcHVRsDjhC1Rjzsa0s-pjxLr4jaNpETpIKiTrasziLVPghl-IkckR6BCMhFsIfmehPId3cdAieb6XL0O6658csKDnCg30orvSVFNIVeim6jQS9p5Tc34YOsFZ9dg-yFYbD-WdGLRfMInvlWyk4Lc6xS98-obFvMFvAD-2WQR0xnrv88jH5W30USblOgiZMx3fVQ3y8uHqcy_8xNFzXT0SL81NWDEDleffgUj9GyXo01_cNgIwjz1s"
+                  src="/icon.png"
                   alt="Hackathon Hub Logo"
                   width={24}
                   height={24}
