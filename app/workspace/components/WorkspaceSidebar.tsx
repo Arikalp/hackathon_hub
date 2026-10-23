@@ -216,6 +216,7 @@ export default function WorkspaceSidebar({
                     width={36}
                     height={36}
                     className="w-9 h-9 rounded-full object-cover ring-1 ring-outline-variant/40 group-hover:ring-primary/60 transition-all"
+                    unoptimized
                   />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-primary/20 text-primary font-mono font-bold text-xs flex items-center justify-center ring-1 ring-outline-variant/40">

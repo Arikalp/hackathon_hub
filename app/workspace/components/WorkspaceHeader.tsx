@@ -84,12 +84,13 @@ export default function WorkspaceHeader({
             src={
               userProfile?.photoURL ||
               user?.photoURL ||
-              "https://lh3.googleusercontent.com/aida-public/AB6AXuBhiT-fS94BgDyhLpMJDlYKntQwDTUm9GXRHoiVTosSsB4dJcFlgij98ihCIA9eKt4Daqmt9AkiE0ly81jiXp5M6Dkn-fdqXxDh4fPTqH--D47WprzLQh2giEixqyAfOE4ZgDWE4h-rdqj9xSrFPAiyIgZrygAKd8SnJd7o53Rv4wtTqCertqG-fVNtRjNzvCfAduj-ZphmsOI8FXpM_acjUFkqhLVJxIjXT_TYDk2UCe-3HLHmYX8k"
+              "/icon.png"
             }
             alt={user?.displayName || "Profile"}
             width={32}
             height={32}
             className="w-8 h-8 rounded-full object-cover ring-1 ring-outline-variant/40"
+            unoptimized
           />
         </div>
       </div>

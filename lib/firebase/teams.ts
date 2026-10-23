@@ -15,6 +15,7 @@ export interface Team {
   name: string;
   description?: string;
   ownerUid: string;
+  logoUrl?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -43,7 +44,8 @@ export interface TeamInvitation {
 export async function createTeam(
   name: string,
   description: string,
-  ownerUid: string
+  ownerUid: string,
+  logoUrl?: string
 ): Promise<string> {
   const teamRef = doc(collection(db, "teams"));
   const teamId = teamRef.id;
@@ -52,6 +54,7 @@ export async function createTeam(
     name,
     description,
     ownerUid,
+    ...(logoUrl ? { logoUrl } : {}),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -73,6 +76,7 @@ export async function createTeam(
         name,
         description,
         role: "owner",
+        ...(logoUrl ? { logoUrl } : {}),
         joinedAt: serverTimestamp(),
       });
     } catch (e) {
@@ -81,6 +85,30 @@ export async function createTeam(
   }
 
   return teamId;
+}
+
+// Save or sync a team member to Firestore under teams/{teamId}/members/{memberUid}
+export async function saveTeamMember(
+  teamId: string,
+  member: TeamMember
+): Promise<void> {
+  if (!teamId || !member.uid) return;
+  try {
+    const memberRef = doc(db, "teams", teamId, "members", member.uid);
+    await setDoc(
+      memberRef,
+      {
+        role: member.role,
+        displayName: member.displayName || "Builder",
+        email: member.email || "",
+        photoURL: member.photoURL || "",
+        joinedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn("Team member cloud sync warning:", e);
+  }
 }
 
 // Fetch all teams a user belongs to

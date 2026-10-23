@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Team, TeamMember, createTeam, inviteTeammate } from "../../../lib/firebase/teams";
+import {
+  Team,
+  TeamMember,
+  createTeam,
+  inviteTeammate,
+  saveTeamMember,
+  getTeamMembers,
+} from "../../../lib/firebase/teams";
+import { uploadTeamLogo } from "../../../lib/firebase/storage";
 import { useAuth } from "../../../lib/auth/AuthContext";
 
 interface TeamsManagerProps {
@@ -23,6 +31,8 @@ export default function TeamsManager({
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [teamDesc, setTeamDesc] = useState("");
+  const [teamLogoUrl, setTeamLogoUrl] = useState("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [inviteSuccess, setInviteSuccess] = useState(false);
@@ -38,6 +48,27 @@ export default function TeamsManager({
       }
     } catch {}
   }, []);
+
+  // Fetch team members from Firestore whenever activeTeam changes
+  useEffect(() => {
+    if (!activeTeam || !activeTeam.id) return;
+    getTeamMembers(activeTeam.id).then((cloudMembers) => {
+      if (cloudMembers && cloudMembers.length > 0) {
+        setTeamMembersMap((prev) => {
+          const updated = {
+            ...prev,
+            [activeTeam.id]: cloudMembers,
+          };
+          try {
+            localStorage.setItem("hh_team_members", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      }
+    }).catch((err) => {
+      console.warn("Could not fetch team members from Firestore:", err);
+    });
+  }, [activeTeam?.id]);
 
   const defaultOwner: TeamMember = {
     uid: user?.uid || "owner-1",
@@ -63,19 +94,22 @@ export default function TeamsManager({
       const teamId = await createTeam(
         teamName.trim(),
         teamDesc.trim(),
-        user?.uid || "guest"
+        user?.uid || "guest",
+        teamLogoUrl.trim() || undefined
       );
       const newTeam: Team = {
         id: teamId,
         name: teamName.trim(),
         description: teamDesc.trim(),
         ownerUid: user?.uid || "guest",
+        logoUrl: teamLogoUrl.trim() || undefined,
       };
       onTeamCreated(newTeam);
       setActiveTeam(newTeam);
       setShowCreateModal(false);
       setTeamName("");
       setTeamDesc("");
+      setTeamLogoUrl("");
     } catch {
       // Fallback local team creation
       const localTeam: Team = {
@@ -83,12 +117,14 @@ export default function TeamsManager({
         name: teamName.trim(),
         description: teamDesc.trim(),
         ownerUid: user?.uid || "guest",
+        logoUrl: teamLogoUrl.trim() || undefined,
       };
       onTeamCreated(localTeam);
       setActiveTeam(localTeam);
       setShowCreateModal(false);
       setTeamName("");
       setTeamDesc("");
+      setTeamLogoUrl("");
     }
   };
 
@@ -115,6 +151,10 @@ export default function TeamsManager({
       role: inviteRole,
       photoURL: undefined,
     };
+
+    // Sync member directly to Firestore
+    saveTeamMember(activeTeam.id, newMember).catch(() => {});
+
     setTeamMembersMap((prev) => {
       const updated = {
         ...prev,
@@ -204,22 +244,33 @@ export default function TeamsManager({
       {activeTeam && (
         <div className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-outline-variant/30 shadow-lg flex flex-col gap-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-outline-variant/20">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-mono text-[10px] font-bold uppercase">
-                  ACTIVE SQUAD
-                </span>
-                <span className="text-outline text-xs font-mono">
-                  • {currentMembers.length} Builder{currentMembers.length === 1 ? "" : "s"}
-                </span>
+            <div className="flex items-center gap-4">
+              {activeTeam.logoUrl && (
+                <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-primary/40 shrink-0 bg-surface-container">
+                  <img
+                    src={activeTeam.logoUrl}
+                    alt={activeTeam.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-mono text-[10px] font-bold uppercase">
+                    ACTIVE SQUAD
+                  </span>
+                  <span className="text-outline text-xs font-mono">
+                    • {currentMembers.length} Builder{currentMembers.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <h2 className="text-2xl font-bold text-on-surface">
+                  {activeTeam.name}
+                </h2>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  {activeTeam.description ||
+                    "Active competition squad ready for hackathon sprints."}
+                </p>
               </div>
-              <h2 className="text-2xl font-bold text-on-surface">
-                {activeTeam.name}
-              </h2>
-              <p className="text-sm text-on-surface-variant mt-1">
-                {activeTeam.description ||
-                  "Active competition squad ready for hackathon sprints."}
-              </p>
             </div>
 
             <button
@@ -254,6 +305,7 @@ export default function TeamsManager({
                           width={40}
                           height={40}
                           className="w-full h-full object-cover"
+                          unoptimized
                         />
                       ) : (
                         <span className="font-mono font-bold text-primary text-sm uppercase">
@@ -325,6 +377,45 @@ export default function TeamsManager({
                   className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary resize-none"
                 />
               </div>
+
+              {/* Firebase Storage Squad Logo */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-mono uppercase text-outline">
+                    Squad Logo / Emblem (Firebase Storage)
+                  </label>
+                  {uploadingLogo && (
+                    <span className="text-[10px] font-mono text-primary animate-pulse flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>
+                      Uploading...
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingLogo(true);
+                    try {
+                      const downloadUrl = await uploadTeamLogo("temp-" + Date.now(), file);
+                      setTeamLogoUrl(downloadUrl);
+                    } catch (err) {
+                      console.error("Team logo upload failed:", err);
+                    } finally {
+                      setUploadingLogo(false);
+                    }
+                  }}
+                  className="w-full text-xs text-outline file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-container file:text-on-primary-container cursor-pointer transition-colors"
+                />
+                {teamLogoUrl && (
+                  <div className="mt-2 w-12 h-12 rounded-xl overflow-hidden border border-primary/40">
+                    <img src={teamLogoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"

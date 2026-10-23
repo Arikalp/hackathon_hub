@@ -21,10 +21,10 @@ export default function OnboardingPage() {
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
-    } else if (!loading && userProfile?.username) {
-      router.push("/workspace");
+    } else if (userProfile?.username && !username) {
+      setUsername(userProfile.username);
     }
-  }, [user, userProfile, loading, router]);
+  }, [user, userProfile, loading, router, username]);
 
   // Real-time debounce check for username
   useEffect(() => {

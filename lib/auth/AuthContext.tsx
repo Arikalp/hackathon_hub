@@ -15,6 +15,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  deleteDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, db, googleProvider } from "../firebase/client";
@@ -27,6 +28,11 @@ export interface UserProfile {
   photoURL: string;
   username: string;
   usernameNormalized: string;
+  bio?: string;
+  skills?: string[];
+  githubUrl?: string;
+  linkedinUrl?: string;
+  portfolioUrl?: string;
   notificationPreferences: {
     emailReminders: boolean;
     deadlineAlerts: boolean;
@@ -48,6 +54,7 @@ interface AuthContextType {
   claimUsername: (username: string) => Promise<{ success: boolean; error?: string }>;
   checkUsernameAvailable: (username: string) => Promise<boolean>;
   refreshProfile: () => Promise<void>;
+  updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -62,6 +69,7 @@ const AuthContext = createContext<AuthContextType>({
   claimUsername: async () => ({ success: false }),
   checkUsernameAvailable: async () => false,
   refreshProfile: async () => {},
+  updateUserProfile: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -69,19 +77,64 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch or refresh user profile from Firestore
+  // Fetch or refresh user profile from Firestore with local cache fallback
   const fetchUserProfile = async (uid: string) => {
+    try {
+      const cached = localStorage.getItem(`hh_profile_${uid}`);
+      if (cached) {
+        setUserProfile(JSON.parse(cached));
+      }
+    } catch {}
+
     try {
       const userRef = doc(db, "users", uid);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
-        setUserProfile(userSnap.data() as UserProfile);
-      } else {
-        setUserProfile(null);
+        const profileData = userSnap.data() as UserProfile;
+        setUserProfile(profileData);
+        try {
+          localStorage.setItem(`hh_profile_${uid}`, JSON.stringify(profileData));
+        } catch {}
       }
     } catch (err) {
       console.warn("Could not fetch user profile from Firestore:", err);
-      setUserProfile(null);
+    }
+  };
+
+  const updateUserProfile = async (data: Partial<UserProfile>) => {
+    if (!user) return;
+
+    if (data.username && data.username !== userProfile?.username) {
+      await claimUsername(data.username);
+    }
+
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, { ...data, updatedAt: serverTimestamp() }, { merge: true });
+
+      if ((data.displayName || data.photoURL) && auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+          ...(data.displayName ? { displayName: data.displayName } : {}),
+          ...(data.photoURL ? { photoURL: data.photoURL } : {}),
+        }).catch(() => {});
+      }
+
+      setUserProfile((prev) => {
+        const merged = { ...prev, ...data } as UserProfile;
+        try {
+          localStorage.setItem(`hh_profile_${user.uid}`, JSON.stringify(merged));
+        } catch {}
+        return merged;
+      });
+    } catch (err) {
+      console.warn("Firestore profile update warning (fallback applied):", err);
+      setUserProfile((prev) => {
+        const merged = { ...prev, ...data } as UserProfile;
+        try {
+          localStorage.setItem(`hh_profile_${user.uid}`, JSON.stringify(merged));
+        } catch {}
+        return merged;
+      });
     }
   };
 
@@ -193,6 +246,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     const normalized = username.toLowerCase();
+    const oldNormalized =
+      userProfile?.usernameNormalized || userProfile?.username?.toLowerCase();
+
+    // If the username is unchanged, treat as success
+    if (oldNormalized === normalized && userProfile?.username === username) {
+      return { success: true };
+    }
 
     try {
       const usernameRef = doc(db, "usernames", normalized);
@@ -205,57 +265,71 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
       }
 
+      // If user had a different username previously, release it
+      if (oldNormalized && oldNormalized !== normalized) {
+        try {
+          await deleteDoc(doc(db, "usernames", oldNormalized));
+        } catch (delErr) {
+          console.warn("Could not release old username:", delErr);
+        }
+      }
+
       await setDoc(usernameRef, {
         uid: user.uid,
         createdAt: serverTimestamp(),
       });
 
       const userRef = doc(db, "users", user.uid);
-      const newProfile: Partial<UserProfile> = {
-        uid: user.uid,
-        email: user.email || "",
-        displayName: user.displayName || username,
-        photoURL:
-          user.photoURL ||
-          "https://lh3.googleusercontent.com/aida-public/AB6AXuBhiT-fS94BgDyhLpMJDlYKntQwDTUm9GXRHoiVTosSsB4dJcFlgij98ihCIA9eKt4Daqmt9AkiE0ly81jiXp5M6Dkn-fdqXxDh4fPTqH--D47WprzLQh2giEixqyAfOE4ZgDWE4h-rdqj9xSrFPAiyIgZrygAKd8SnJd7o53Rv4wtTqCertqG-fVNtRjNzvCfAduj-ZphmsOI8FXpM_acjUFkqhLVJxIjXT_TYDk2UCe-3HLHmYX8k",
+      const updatedFields: Partial<UserProfile> = {
         username: username,
         usernameNormalized: normalized,
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(userRef, updatedFields, { merge: true });
+
+      const mergedProfile: UserProfile = {
+        uid: user.uid,
+        email: user.email || "",
+        displayName: userProfile?.displayName || user.displayName || username,
+        photoURL: userProfile?.photoURL || user.photoURL || "/icon.png",
         notificationPreferences: userProfile?.notificationPreferences || {
           emailReminders: true,
           deadlineAlerts: true,
           teamInvites: true,
         },
-        updatedAt: serverTimestamp(),
+        ...userProfile,
+        username: username,
+        usernameNormalized: normalized,
       };
 
-      if (!userProfile) {
-        newProfile.createdAt = serverTimestamp();
-      }
-
-      await setDoc(userRef, newProfile, { merge: true });
-      await fetchUserProfile(user.uid);
+      setUserProfile(mergedProfile);
+      try {
+        localStorage.setItem(`hh_profile_${user.uid}`, JSON.stringify(mergedProfile));
+      } catch {}
 
       return { success: true };
     } catch (err: unknown) {
-      console.warn("Firestore error during username claim:", err);
-      // Fallback: If Firestore rules haven't been updated yet in console, set local profile so user isn't blocked
+      console.warn("Firestore error during username claim (local fallback used):", err);
       const fallbackProfile: UserProfile = {
         uid: user.uid,
         email: user.email || "",
-        displayName: user.displayName || username,
-        photoURL:
-          user.photoURL ||
-          "https://lh3.googleusercontent.com/aida-public/AB6AXuBhiT-fS94BgDyhLpMJDlYKntQwDTUm9GXRHoiVTosSsB4dJcFlgij98ihCIA9eKt4Daqmt9AkiE0ly81jiXp5M6Dkn-fdqXxDh4fPTqH--D47WprzLQh2giEixqyAfOE4ZgDWE4h-rdqj9xSrFPAiyIgZrygAKd8SnJd7o53Rv4wtTqCertqG-fVNtRjNzvCfAduj-ZphmsOI8FXpM_acjUFkqhLVJxIjXT_TYDk2UCe-3HLHmYX8k",
-        username: username,
-        usernameNormalized: normalized,
-        notificationPreferences: {
+        displayName: userProfile?.displayName || user.displayName || username,
+        photoURL: userProfile?.photoURL || user.photoURL || "/icon.png",
+        notificationPreferences: userProfile?.notificationPreferences || {
           emailReminders: true,
           deadlineAlerts: true,
           teamInvites: true,
         },
+        ...userProfile,
+        username: username,
+        usernameNormalized: normalized,
       };
 
       setUserProfile(fallbackProfile);
+      try {
+        localStorage.setItem(`hh_profile_${user.uid}`, JSON.stringify(fallbackProfile));
+      } catch {}
       return { success: true };
     }
   };
@@ -280,6 +354,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         claimUsername,
         checkUsernameAvailable,
         refreshProfile,
+        updateUserProfile,
       }}
     >
       {children}
