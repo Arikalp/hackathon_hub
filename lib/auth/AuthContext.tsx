@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore";
 import { auth, db, googleProvider } from "../firebase/client";
 import { usernameSchema } from "../validations";
+import { cleanFirestoreData } from "../firebase/hackathons";
 
 export interface UserProfile {
   uid: string;
@@ -110,7 +111,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       const userRef = doc(db, "users", user.uid);
-      await setDoc(userRef, { ...data, updatedAt: serverTimestamp() }, { merge: true });
+      const cleanData = cleanFirestoreData({ ...data, updatedAt: serverTimestamp() });
+      await setDoc(userRef, cleanData, { merge: true });
 
       if ((data.displayName || data.photoURL) && auth.currentUser) {
         await updateProfile(auth.currentUser, {

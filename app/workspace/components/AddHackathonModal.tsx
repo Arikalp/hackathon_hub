@@ -11,6 +11,8 @@ export interface HackathonRecord {
   status: string;
   statusType: "urgent" | "forming" | "idea" | "registered";
   dates: string;
+  location?: string;
+  college?: string;
   remainingDays: number;
   deadlineText: string;
   description: string;
@@ -18,6 +20,16 @@ export interface HackathonRecord {
   teamCount: string;
   bannerUrl?: string;
   tags?: string[];
+}
+
+export function calculateDaysRemaining(dateStr: string): number {
+  if (!dateStr) return 0;
+  const target = new Date(dateStr);
+  if (isNaN(target.getTime())) return 0;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 interface AddHackathonModalProps {
@@ -41,12 +53,13 @@ export default function AddHackathonModal({
 }: AddHackathonModalProps) {
   const [name, setName] = useState("");
   const [organizer, setOrganizer] = useState("");
+  const [college, setCollege] = useState("");
+  const [location, setLocation] = useState("");
   const [mode, setMode] = useState("Online / Global");
   const [status, setStatus] = useState("Registered & Ready");
   const [statusType, setStatusType] = useState<"urgent" | "forming" | "idea" | "registered">("registered");
   const [dates, setDates] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [remainingDays, setRemainingDays] = useState(14);
   const [teamName, setTeamName] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
@@ -59,12 +72,13 @@ export default function AddHackathonModal({
     if (initialData) {
       setName(initialData.name || "");
       setOrganizer(initialData.organizer || "");
+      setCollege(initialData.college || "");
+      setLocation(initialData.location || "");
       setMode(initialData.mode || "Online / Global");
       setStatus(initialData.status || "Registered & Ready");
       setStatusType(initialData.statusType || "registered");
       setDates(initialData.dates || "");
-      setDeadline(initialData.deadlineText || "");
-      setRemainingDays(initialData.remainingDays ?? 14);
+      setDeadline(initialData.deadlineText?.replace("Deadline: ", "") || "");
       setTeamName(initialData.teamName || activeTeamName || "Solo Squad");
       setDescription(initialData.description || "");
       setTags(initialData.tags?.join(", ") || "");
@@ -72,12 +86,13 @@ export default function AddHackathonModal({
     } else {
       setName("");
       setOrganizer("");
+      setCollege("");
+      setLocation("");
       setMode("Online / Global");
       setStatus("Registered & Ready");
       setStatusType("registered");
       setDates("");
       setDeadline("");
-      setRemainingDays(14);
       setTeamName(activeTeamName || "Solo Squad");
       setDescription("");
       setTags("");
@@ -91,6 +106,8 @@ export default function AddHackathonModal({
     e.preventDefault();
     if (!name.trim()) return;
 
+    const computedDays = calculateDaysRemaining(dates);
+
     const record: HackathonRecord = {
       id: initialData?.id || "hack-" + Date.now(),
       name: name.trim(),
@@ -98,15 +115,23 @@ export default function AddHackathonModal({
       mode: mode,
       status: status.trim() || "Registered & Ready",
       statusType: statusType,
-      dates: dates.trim() || "TBD 2025",
-      remainingDays: Number(remainingDays) || 0,
-      deadlineText: deadline.trim() || "Registration open",
+      dates: dates.trim() || "TBD 2026",
+      location: location.trim() || "",
+      college: college.trim() || "",
+      remainingDays: computedDays,
+      deadlineText: deadline.trim()
+        ? `Deadline: ${deadline.trim()}`
+        : computedDays > 0
+        ? `Starts in ${computedDays} days`
+        : computedDays === 0
+        ? "Happening today!"
+        : "Event concluded",
       description:
         description.trim() ||
         "Building innovative full-stack application and competing for top prize pools.",
       teamName: teamName.trim() || activeTeamName || "Solo Squad",
       teamCount: initialData?.teamCount || "1/4",
-      bannerUrl: bannerUrl.trim() || undefined,
+      bannerUrl: bannerUrl.trim() || "",
       tags: tags
         .split(",")
         .map((t) => t.trim())
@@ -227,44 +252,74 @@ export default function AddHackathonModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* College & Place Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-mono uppercase tracking-wider text-outline mb-1">
-                Sprint Dates
+                College / University / Host Institution *
               </label>
               <input
                 type="text"
+                required
+                value={college}
+                onChange={(e) => setCollege(e.target.value)}
+                placeholder="e.g. Stanford University or MIT"
+                className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono uppercase tracking-wider text-outline mb-1">
+                Place / Venue / City *
+              </label>
+              <input
+                type="text"
+                required
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Main Auditorium, Campus or Online Discord"
+                className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Event Date & Registration Deadline Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-mono uppercase tracking-wider text-outline">
+                  Hackathon Held On (Event Date) *
+                </label>
+                {dates && (
+                  <span className="text-[10px] font-mono text-primary font-bold">
+                    {calculateDaysRemaining(dates) > 1
+                      ? `${calculateDaysRemaining(dates)} days away`
+                      : calculateDaysRemaining(dates) === 1
+                      ? "Starts tomorrow!"
+                      : calculateDaysRemaining(dates) === 0
+                      ? "Happening today!"
+                      : "Past event"}
+                  </span>
+                )}
+              </div>
+              <input
+                type="date"
+                required
                 value={dates}
                 onChange={(e) => setDates(e.target.value)}
-                placeholder="e.g. Dec 10 - Dec 14"
-                className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary transition-colors"
+                className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary transition-colors cursor-pointer"
               />
             </div>
 
             <div>
               <label className="block text-xs font-mono uppercase tracking-wider text-outline mb-1">
-                Deadline
+                Registration Deadline (Optional)
               </label>
               <input
-                type="text"
+                type="date"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
-                placeholder="e.g. Dec 05, 2025"
-                className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-outline mb-1">
-                Days Remaining
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={remainingDays}
-                onChange={(e) => setRemainingDays(Number(e.target.value))}
-                placeholder="e.g. 14"
-                className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary transition-colors"
+                className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary transition-colors cursor-pointer"
               />
             </div>
           </div>

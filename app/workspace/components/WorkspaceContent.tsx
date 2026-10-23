@@ -306,6 +306,24 @@ export default function WorkspaceContent({
                         <span className="font-mono text-xs text-outline uppercase font-semibold tracking-wider">
                           {hackathon.organizer}
                         </span>
+                        {hackathon.college && (
+                          <>
+                            <span className="text-outline-variant">•</span>
+                            <span className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/30 text-primary font-mono text-xs font-semibold flex items-center gap-1">
+                              <span className="material-symbols-outlined text-xs">school</span>
+                              {hackathon.college}
+                            </span>
+                          </>
+                        )}
+                        {hackathon.location && (
+                          <>
+                            <span className="text-outline-variant">•</span>
+                            <span className="px-2 py-0.5 rounded-md bg-surface-container-high text-on-surface-variant font-mono text-xs flex items-center gap-1">
+                              <span className="material-symbols-outlined text-xs text-secondary">pin_drop</span>
+                              {hackathon.location}
+                            </span>
+                          </>
+                        )}
                         <span className="text-outline-variant">•</span>
                         <span
                           className={`px-2 py-0.5 rounded-full font-mono text-xs font-semibold flex items-center gap-1.5 ${
@@ -333,14 +351,18 @@ export default function WorkspaceContent({
                     <div className="flex flex-col items-end">
                       <span
                         className={`px-2.5 py-1 rounded-lg font-mono text-xs font-bold ${
-                          hackathon.statusType === "urgent"
+                          hackathon.statusType === "urgent" || hackathon.remainingDays <= 2
                             ? "bg-surface-container-highest text-secondary border border-secondary/30"
                             : "bg-surface-container-high text-on-surface"
                         }`}
                       >
-                        {hackathon.remainingDays <= 2
+                        {hackathon.remainingDays > 1
                           ? `Starts in ${hackathon.remainingDays} days`
-                          : `${hackathon.remainingDays} days remaining`}
+                          : hackathon.remainingDays === 1
+                          ? `Starts tomorrow!`
+                          : hackathon.remainingDays === 0
+                          ? `Happening Today!`
+                          : `Concluded`}
                       </span>
                       <span
                         className={`font-mono text-xs mt-1 flex items-center gap-1 ${
@@ -382,9 +404,10 @@ export default function WorkspaceContent({
                     <div className="flex items-center gap-6">
                       <div className="flex flex-col">
                         <span className="font-mono text-[11px] text-outline">
-                          Sprint Timeline
+                          Held On
                         </span>
-                        <span className="font-mono text-xs text-on-surface font-semibold">
+                        <span className="font-mono text-xs text-on-surface font-semibold flex items-center gap-1">
+                          <span className="material-symbols-outlined text-xs text-primary">calendar_month</span>
                           {hackathon.dates}
                         </span>
                       </div>

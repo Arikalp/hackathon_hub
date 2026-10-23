@@ -59,17 +59,39 @@ export async function getTeamHackathons(
   }
 }
 
+// Helper to strip undefined values so Firestore setDoc never throws Unsupported field value
+export function cleanFirestoreData<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) {
+      continue;
+    }
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      !(value instanceof Date) &&
+      typeof (value as any).toMillis !== "function"
+    ) {
+      result[key] = cleanFirestoreData(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 // Create a new hackathon record under a team
 export async function createTeamHackathon(
   teamId: string,
   data: Omit<FirestoreHackathon, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
   const ref = doc(collection(db, "teams", teamId, "hackathons"));
-  const newHackathon = {
+  const newHackathon = cleanFirestoreData({
     ...data,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  };
+  });
   await setDoc(ref, newHackathon);
   return ref.id;
 }
@@ -81,10 +103,11 @@ export async function updateTeamHackathon(
   updates: Partial<FirestoreHackathon>
 ): Promise<void> {
   const ref = doc(db, "teams", teamId, "hackathons", hackathonId);
-  await updateDoc(ref, {
+  const cleanUpdates = cleanFirestoreData({
     ...updates,
     updatedAt: serverTimestamp(),
   });
+  await updateDoc(ref, cleanUpdates);
 }
 
 // Delete a hackathon record
@@ -109,15 +132,15 @@ export async function saveHackathonRecord(
   if (!uid || uid === "guest") return;
   try {
     const ref = doc(db, "users", uid, "hackathons", record.id);
-    await setDoc(
-      ref,
-      {
-        ...record,
-        userId: uid,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const cleanData = cleanFirestoreData({
+      ...record,
+      bannerUrl: record.bannerUrl || "",
+      location: record.location || "",
+      college: record.college || "",
+      userId: uid,
+      updatedAt: serverTimestamp(),
+    });
+    await setDoc(ref, cleanData, { merge: true });
   } catch (err) {
     console.warn("Firestore sync warning during hackathon save (local cache used):", err);
   }
