@@ -16,6 +16,16 @@ service cloud.firestore {
       match /notifications/{notificationId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
+
+      // User registered hackathons
+      match /hackathons/{hackathonId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // User teams bookmarks
+      match /teams/{teamId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
 
     // Teams collection

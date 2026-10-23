@@ -3,40 +3,54 @@
 import { useState } from "react";
 import Image from "next/image";
 import { HackathonRecord } from "./AddHackathonModal";
+import { useAuth } from "../../../lib/auth/AuthContext";
 
 interface WorkspaceContentProps {
   onOpenAddModal: () => void;
   hackathons: HackathonRecord[];
   searchQuery: string;
+  teamsCount?: number;
+  onEditHackathon?: (hackathon: HackathonRecord) => void;
 }
 
 export default function WorkspaceContent({
   onOpenAddModal,
   hackathons,
   searchQuery,
+  teamsCount = 0,
+  onEditHackathon,
 }: WorkspaceContentProps) {
+  const { user, userProfile } = useAuth();
   const [filter, setFilter] = useState<"all" | "active" | "upcoming">("all");
+
+  const displayName =
+    userProfile?.displayName ||
+    user?.displayName ||
+    (user?.email ? user.email.split("@")[0] : "Builder");
+  const username =
+    userProfile?.username ||
+    (user?.email ? user.email.split("@")[0] : "builder");
 
   // Checklist state for Sprint Launch Protocol
   const [checklist, setChecklist] = useState([
     {
       id: 1,
-      text: "Anthropic & OpenAI API keys generated",
-      checked: true,
+      text: "Anthropic & OpenAI API keys configured",
+      checked: false,
     },
     {
       id: 2,
-      text: "Devpost project submission draft initialized",
-      checked: true,
+      text: "Hackathon project repository initialized",
+      checked: false,
     },
     {
       id: 3,
-      text: "Discord war room & Huddle channel linked",
-      checked: true,
+      text: "Discord war room & communication link set up",
+      checked: false,
     },
     {
       id: 4,
-      text: "Vercel production branch staging check",
+      text: "Production deployment & staging verified",
       checked: false,
     },
   ]);
@@ -65,6 +79,10 @@ export default function WorkspaceContent({
     return true;
   });
 
+  const urgentCount = hackathons.filter(
+    (h) => h.statusType === "urgent" || h.remainingDays <= 3
+  ).length;
+
   return (
     <div className="flex flex-col w-full gap-8">
       {/* Top Bar / Command Context */}
@@ -72,18 +90,24 @@ export default function WorkspaceContent({
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold text-on-surface tracking-tight">
-              Ready to build something legendary?
+              Ready to build, {displayName}?
             </h1>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-high border border-outline-variant/30 text-on-surface-variant font-mono text-xs">
               <span className="inline-block w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(168,213,76,0.8)]"></span>
-              <span>@alexrivera.eth</span>
+              <span>@{username}</span>
             </div>
             <span className="px-2.5 py-1 rounded-md bg-primary-container/20 text-primary border border-primary/30 font-mono text-xs uppercase tracking-wider font-semibold">
-              Pro Builder
+              Builder OS
             </span>
           </div>
           <p className="text-sm sm:text-base text-outline">
-            You have <span className="text-secondary font-medium">2 sprints</span> launching in the next 72 hours. Workspace systems nominal.
+            {hackathons.length > 0 ? (
+              <span>
+                You have <span className="text-secondary font-medium">{hackathons.length} sprint{hackathons.length === 1 ? "" : "s"}</span> tracked in your builder pipeline.
+              </span>
+            ) : (
+              <span>No active hackathons tracked yet. Click &quot;Add Hackathon&quot; to log your upcoming competitions.</span>
+            )}
           </p>
         </div>
 
@@ -98,7 +122,7 @@ export default function WorkspaceContent({
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              All Events
+              All Events ({hackathons.length})
             </button>
             <button
               onClick={() => setFilter("active")}
@@ -124,7 +148,7 @@ export default function WorkspaceContent({
 
           <button
             onClick={onOpenAddModal}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary-container text-on-primary-container hover:bg-primary hover:text-on-primary transition-all text-xs font-semibold shadow-[0_0_16px_-4px_rgba(160,120,255,0.4)] active:scale-[0.98]"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary-container text-on-primary-container hover:bg-primary hover:text-on-primary transition-all text-xs font-semibold shadow-[0_0_16px_-4px_rgba(160,120,255,0.4)] active:scale-[0.98] cursor-pointer"
           >
             <span className="material-symbols-outlined text-base">add</span>
             <span>Add Hackathon</span>
@@ -153,7 +177,7 @@ export default function WorkspaceContent({
           </div>
           <div className="mt-2 font-mono text-xs text-secondary flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
-            <span>2 starting this week</span>
+            <span>{hackathons.length} active in pipeline</span>
           </div>
         </div>
 
@@ -164,12 +188,14 @@ export default function WorkspaceContent({
             <span className="inline-block w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
           </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-mono text-2xl font-bold text-on-surface">02</span>
+            <span className="font-mono text-2xl font-bold text-on-surface">
+              {String(urgentCount).padStart(2, "0")}
+            </span>
             <span className="font-mono text-xs text-error font-medium">Critical</span>
           </div>
           <div className="mt-2 font-mono text-xs text-secondary flex items-center gap-1 font-medium">
             <span className="material-symbols-outlined text-xs">timer</span>
-            <span>&lt; 48 hrs remaining</span>
+            <span>{urgentCount > 0 ? `${urgentCount} urgent cutoff(s)` : "No urgent cutoffs"}</span>
           </div>
         </div>
 
@@ -182,11 +208,13 @@ export default function WorkspaceContent({
             </span>
           </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-mono text-2xl font-bold text-on-surface">03</span>
+            <span className="font-mono text-2xl font-bold text-on-surface">
+              {String(teamsCount).padStart(2, "0")}
+            </span>
             <span className="font-mono text-xs text-outline">Rosters</span>
           </div>
-          <div className="mt-2 font-mono text-xs text-outline truncate" title="NovaLogic, SynthLabs, ZeroKnowledge">
-            NovaLogic · SynthLabs
+          <div className="mt-2 font-mono text-xs text-outline truncate">
+            {teamsCount > 0 ? `${teamsCount} registered squad${teamsCount === 1 ? "" : "s"}` : "No squads created"}
           </div>
         </div>
 
@@ -199,12 +227,12 @@ export default function WorkspaceContent({
             </span>
           </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-mono text-2xl font-bold text-on-surface">14</span>
+            <span className="font-mono text-2xl font-bold text-on-surface">00</span>
             <span className="font-mono text-xs text-outline">Events</span>
           </div>
           <div className="mt-2 font-mono text-xs text-on-surface-variant flex items-center gap-1">
             <span className="material-symbols-outlined text-xs text-primary">verified</span>
-            <span>All verified submissions</span>
+            <span>0 verified submissions</span>
           </div>
         </div>
 
@@ -215,12 +243,12 @@ export default function WorkspaceContent({
             <span className="material-symbols-outlined text-sm text-primary">military_tech</span>
           </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-mono text-2xl font-bold text-primary">06</span>
+            <span className="font-mono text-2xl font-bold text-primary">00</span>
             <span className="font-mono text-xs text-outline">Podiums</span>
           </div>
           <div className="mt-2 font-mono text-xs text-primary-fixed-dim flex items-center justify-between">
             <span>Win Rate</span>
-            <span className="font-bold">42.8%</span>
+            <span className="font-bold">0.0%</span>
           </div>
         </div>
       </div>
@@ -355,51 +383,35 @@ export default function WorkspaceContent({
 
                       <div className="flex flex-col">
                         <span className="font-mono text-[11px] text-outline">
-                          {hackathon.teamName} ({hackathon.teamCount})
+                          Squad: <span className="text-on-surface font-semibold">{hackathon.teamName}</span>
                         </span>
-                        <div className="flex items-center -space-x-1.5 mt-1">
-                          <Image
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDb2DzUVxovw9ASgtQ7-MpBY1-cEjFTR1xa8XNV3QOGJt1uKup9ZZAWwGZzrw-73DUoQ1Cd26PYeslNemQxb01iwPBqA0A7XH_cqpZlu0VbuxezDvXeC4rplJwRapopoeF58l0klgUCA1aOjBKQbNWrwOA0vlWTuYEHtxghLhekHUHmlqIx73ZBGHOZtykq1jQUyVICldOfBBgzx87xnUCs5Kt88hIHRcN7mTnRmYjT6U52a4PXLRNB"
-                            alt="Alex"
-                            width={24}
-                            height={24}
-                            className="w-6 h-6 rounded-full border border-surface-container-low object-cover"
-                            title="Alex Rivera (Lead)"
-                          />
-                          <Image
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJYxOpHYFUsNtx7yCHuLfm7SBLPUR4etdSyeEcNMOn5zCI8Kfrpdno-0Ui7Xq6-PRp487G1iffBETIbAog0Ifi7ES69Dm8Hly-QDn7jPhCwVO3hDjSJUj8MbauMPZNd1GEz6m3QHYzfb76M5MtmxWjRUiUg6lXaWnhrhcNpt4a411iMQLEAkzdULTEXvbRz2ORCKHmQ8Xobfi1cwd1API6yl9JRfP77gPSh-Y0AU-H3bLseVfb7mPj"
-                            alt="Maya"
-                            width={24}
-                            height={24}
-                            className="w-6 h-6 rounded-full border border-surface-container-low object-cover"
-                            title="Maya Chen (ML)"
-                          />
-                          <Image
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqsripXfRb9frwH_FBBFaaA3Rl9Hd2JbtvJU8vXLIs5AoY7v3qGMpv1vkGX8Ld2Tc1rCKB1SFA_4qCCYjoolk17UhDwY_KtW5tRo9yz-O_PMbZFgbt4idNoepEdRSUXR-RCorSDw3075xefJJRdo7DrA5sAD4pnNV7Bajxd8qrfZVISfvQQ8OflBkfmOItO1-jd2pyk7_WboixrZE-DOXLo8h5YrUVhreuFo_TdH4DMCPMNQYtXoAn"
-                            alt="Liam"
-                            width={24}
-                            height={24}
-                            className="w-6 h-6 rounded-full border border-surface-container-low object-cover"
-                            title="Liam Vance (Contracts)"
-                          />
-                          <Image
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzGs0-FlDJv2oDbGzuG8iknQ_9jyobl4Gu4qPH2R5jANocpKVZM8NiQN3Yl4uV8zwhOCqtDDe2_NzQBLGX6VhPhZPJtvdhq4GuUEfHBIQcR_tFjIptjrmNh2VkeYCSUbvxTDqhaNBGcuoEJoPXuFOdQvamF_7X6Lns8FQlr29pe4XEnB-xYO9Bd53ziLNLnkyKfkHLGc1Yi0nz7ADNz3JVs2ut6x0sz0ivIOspyyNAf9tvfYUFtNzC"
-                            alt="Sofia"
-                            width={24}
-                            height={24}
-                            className="w-6 h-6 rounded-full border border-surface-container-low object-cover"
-                            title="Sofia Ramos (Design)"
-                          />
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-container-high text-on-surface-variant font-mono text-[11px] border border-outline-variant/30">
+                            <span className="material-symbols-outlined text-xs text-primary">groups</span>
+                            <span>{hackathon.teamCount}</span>
+                          </span>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {onEditHackathon && (
+                        <button
+                          onClick={() => onEditHackathon(hackathon)}
+                          className="px-3 py-1.5 rounded-lg bg-surface-container-high text-primary hover:bg-primary hover:text-on-primary transition-all text-xs font-semibold flex items-center gap-1 border border-primary/30 cursor-pointer shadow-sm"
+                          type="button"
+                          title="Update hackathon details and status"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                          <span>Update</span>
+                        </button>
+                      )}
                       <button
+                        onClick={() => onEditHackathon ? onEditHackathon(hackathon) : null}
                         className="px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors text-xs font-medium border border-outline-variant/30 cursor-pointer"
                         type="button"
                       >
-                        View Details
+                        Details
                       </button>
                       <button
                         className="px-3.5 py-1.5 rounded-lg bg-secondary text-on-secondary text-xs font-semibold hover:bg-secondary-fixed transition-all flex items-center gap-1.5 shadow-[0_0_12px_-2px_rgba(168,213,76,0.3)] cursor-pointer"
@@ -408,7 +420,7 @@ export default function WorkspaceContent({
                         <span className="material-symbols-outlined text-base">
                           terminal
                         </span>
-                        <span>Open Workspace</span>
+                        <span>Workspace</span>
                       </button>
                     </div>
                   </div>
@@ -498,29 +510,13 @@ export default function WorkspaceContent({
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">10</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">11</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">12</div>
-
-              {/* Today (13th) / Deadline */}
-              <div className="relative p-1.5 rounded bg-surface-container-high text-on-surface font-bold ring-1 ring-secondary/50 group cursor-pointer">
+              <div className="p-1.5 rounded bg-surface-container-high text-on-surface font-bold ring-1 ring-secondary/50">
                 13
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-secondary shadow-[0_0_6px_#a8d54c]"></span>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col bg-surface-container-highest px-2 py-1 rounded text-[11px] font-mono text-secondary whitespace-nowrap shadow-lg border border-outline-variant/30 z-20">
-                  <span>Today: Buildspace Registration Closes</span>
-                </div>
               </div>
-
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">14</div>
-
-              {/* Sprint Start Date (15th) */}
-              <div className="relative p-1.5 rounded bg-primary-container/20 text-primary font-bold border border-primary/40 group cursor-pointer">
-                15
-                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary"></span>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col bg-surface-container-highest px-2 py-1 rounded text-[11px] font-mono text-primary whitespace-nowrap shadow-lg border border-outline-variant/30 z-20">
-                  <span>Buildspace AI Sprint Kickoff</span>
-                </div>
-              </div>
-
-              <div className="p-1.5 rounded bg-primary-container/10 text-on-surface">16</div>
-              <div className="p-1.5 rounded bg-primary-container/10 text-on-surface">17</div>
+              <div className="p-1.5 rounded hover:bg-surface-container transition-colors">15</div>
+              <div className="p-1.5 rounded hover:bg-surface-container transition-colors">16</div>
+              <div className="p-1.5 rounded hover:bg-surface-container transition-colors">17</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">18</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">19</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">20</div>
@@ -529,12 +525,7 @@ export default function WorkspaceContent({
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">23</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">24</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">25</div>
-
-              {/* DevForge Deadline (26th) */}
-              <div className="relative p-1.5 rounded hover:bg-surface-container transition-colors font-medium text-secondary">
-                26
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-secondary"></span>
-              </div>
+              <div className="p-1.5 rounded hover:bg-surface-container transition-colors">26</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">27</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">28</div>
               <div className="p-1.5 rounded hover:bg-surface-container transition-colors">29</div>
@@ -569,70 +560,33 @@ export default function WorkspaceContent({
               </span>
             </div>
 
-            <div className="flex flex-col divide-y divide-outline-variant/15 text-xs">
-              {/* Feed Item 1 */}
-              <div className="py-2.5 flex items-start gap-2.5 first:pt-1">
-                <span className="material-symbols-outlined text-primary text-sm mt-0.5">
-                  commit
-                </span>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-on-surface leading-tight">
-                    <span className="font-semibold text-on-surface">Maya Chen</span>{" "}
-                    pushed prototype commit to{" "}
-                    <code className="font-mono text-[11px] text-primary-fixed-dim bg-surface-container px-1 py-0.5 rounded">
-                      novalogic/hyper-agent
-                    </code>
-                  </span>
-                  <span className="font-mono text-[10px] text-outline mt-1">12m ago</span>
-                </div>
+            {hackathons.length > 0 ? (
+              <div className="flex flex-col divide-y divide-outline-variant/15 text-xs">
+                {hackathons.map((h) => (
+                  <div key={h.id} className="py-2.5 flex items-start gap-2.5 first:pt-1">
+                    <span className="material-symbols-outlined text-primary text-sm mt-0.5">
+                      flag
+                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-on-surface leading-tight">
+                        Logged <span className="font-semibold text-on-surface">{h.name}</span> with squad {h.teamName}
+                      </span>
+                      <span className="font-mono text-[10px] text-outline mt-1">{h.dates}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-
-              {/* Feed Item 2 */}
-              <div className="py-2.5 flex items-start gap-2.5">
-                <span className="material-symbols-outlined text-secondary text-sm mt-0.5">
-                  assignment_turned_in
+            ) : (
+              <div className="py-6 text-center text-outline text-xs flex flex-col items-center gap-1.5">
+                <span className="material-symbols-outlined text-2xl text-outline/50">
+                  radar
                 </span>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-on-surface leading-tight">
-                    <span className="font-semibold text-on-surface">Alex Rivera</span>{" "}
-                    finalized team roster for Buildspace AI Sprint
-                  </span>
-                  <span className="font-mono text-[10px] text-outline mt-1">1h ago</span>
-                </div>
-              </div>
-
-              {/* Feed Item 3 */}
-              <div className="py-2.5 flex items-start gap-2.5">
-                <span className="material-symbols-outlined text-error text-sm mt-0.5">
-                  notifications_active
+                <span className="font-medium text-on-surface-variant">No squad activity yet</span>
+                <span className="text-[11px] text-outline max-w-[220px]">
+                  Sprint commits, deadline alerts, and team invites will stream here.
                 </span>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-on-surface leading-tight">
-                    <span className="text-error font-medium">Deadline alert:</span>{" "}
-                    ETHGlobal Synthesis closes in 48 hours
-                  </span>
-                  <span className="font-mono text-[10px] text-outline mt-1">3h ago</span>
-                </div>
               </div>
-
-              {/* Feed Item 4 */}
-              <div className="py-2.5 flex items-start gap-2.5 last:pb-1">
-                <span className="material-symbols-outlined text-tertiary text-sm mt-0.5">
-                  person_add
-                </span>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-on-surface leading-tight">
-                    <span className="font-semibold text-on-surface">Liam Vance</span>{" "}
-                    joined team{" "}
-                    <span className="text-on-surface-variant font-medium">
-                      QuantumForge
-                    </span>{" "}
-                    as Smart Contract Lead
-                  </span>
-                  <span className="font-mono text-[10px] text-outline mt-1">Yesterday</span>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Quick Team Checklist Widget */}

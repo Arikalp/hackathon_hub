@@ -58,30 +58,68 @@ export async function createTeam(
 
   await setDoc(teamRef, newTeam);
 
-  // Add owner to members subcollection: `teams/{teamId}/members/{ownerUid}`
-  const memberRef = doc(db, "teams", teamId, "members", ownerUid);
-  await setDoc(memberRef, {
-    role: "owner",
-    joinedAt: serverTimestamp(),
-  });
+  // Add owner to members subcollection & bookmark under users/{ownerUid}/teams
+  if (ownerUid && ownerUid !== "guest") {
+    try {
+      const memberRef = doc(db, "teams", teamId, "members", ownerUid);
+      await setDoc(memberRef, {
+        role: "owner",
+        joinedAt: serverTimestamp(),
+      });
+
+      const userTeamRef = doc(db, "users", ownerUid, "teams", teamId);
+      await setDoc(userTeamRef, {
+        teamId,
+        name,
+        description,
+        role: "owner",
+        joinedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.warn("User team bookmark warning:", e);
+    }
+  }
 
   return teamId;
 }
 
 // Fetch all teams a user belongs to
 export async function getUserTeams(uid: string): Promise<Team[]> {
+  if (!uid || uid === "guest") return [];
   try {
-    // Check teams where user is owner
-    const teamsQuery = query(
-      collection(db, "teams"),
-      where("ownerUid", "==", uid)
-    );
-    const snap = await getDocs(teamsQuery);
     const teams: Team[] = [];
 
-    snap.forEach((d) => {
-      teams.push({ id: d.id, ...d.data() } as Team);
-    });
+    // 1. Check users/{uid}/teams (direct user ownership collection)
+    try {
+      const userTeamsSnap = await getDocs(collection(db, "users", uid, "teams"));
+      userTeamsSnap.forEach((d) => {
+        const data = d.data();
+        teams.push({
+          id: data.teamId || d.id,
+          name: data.name || "Squad",
+          description: data.description || "",
+          ownerUid: uid,
+        });
+      });
+    } catch {
+      // ignore
+    }
+
+    // 2. Query collection 'teams' where ownerUid == uid
+    try {
+      const teamsQuery = query(
+        collection(db, "teams"),
+        where("ownerUid", "==", uid)
+      );
+      const snap = await getDocs(teamsQuery);
+      snap.forEach((d) => {
+        if (!teams.some((t) => t.id === d.id)) {
+          teams.push({ id: d.id, ...d.data() } as Team);
+        }
+      });
+    } catch {
+      // ignore
+    }
 
     return teams;
   } catch (error) {

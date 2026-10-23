@@ -9,35 +9,7 @@ export default function NotificationsManager() {
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
-  const [notifications, setNotifications] = useState<AppNotification[]>([
-    {
-      id: "notif-1",
-      type: "deadline",
-      title: "Critical Deadline: Buildspace AI Sprint 2025",
-      message:
-        "Final submission cutoff closes in less than 42 hours! Ensure your pitch deck, repo, and video demo are linked.",
-      readAt: null,
-      createdAt: "10m ago",
-    },
-    {
-      id: "notif-2",
-      type: "invite",
-      title: "Team Invitation: SynthLabs",
-      message:
-        "Alex Rivera invited you to join SynthLabs as Full-Stack Architect for DevForge Global Challenge.",
-      readAt: null,
-      createdAt: "1h ago",
-    },
-    {
-      id: "notif-3",
-      type: "update",
-      title: "Roster Finalized",
-      message:
-        "Team NovaLogic has locked in all 4 builders for the upcoming global sprint window.",
-      readAt: "Yesterday",
-      createdAt: "Yesterday",
-    },
-  ]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   const toggleRead = (id: string) => {
     setNotifications((prev) =>
@@ -64,10 +36,10 @@ export default function NotificationsManager() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: user?.email || "builder@novalogic.dev",
-          name: user?.displayName || "Alex Rivera",
-          hackathonName: "Buildspace AI Sprint 2025",
-          deadlineText: "Today, 23:59 UTC",
+          email: user?.email || "builder@example.com",
+          name: user?.displayName || (user?.email ? user.email.split("@")[0] : "Builder"),
+          hackathonName: "Upcoming Hackathon Sprint",
+          deadlineText: "In 48 Hours",
           daysLeft: 2,
         }),
       });
@@ -76,7 +48,7 @@ export default function NotificationsManager() {
       if (res.ok) {
         setTestResult(
           `✓ Nodemailer dispatch simulated successfully to ${
-            user?.email || "builder@novalogic.dev"
+            user?.email || "registered address"
           }!`
         );
 
@@ -86,7 +58,7 @@ export default function NotificationsManager() {
           type: "reminder",
           title: "Scheduled Email Reminder Dispatched",
           message:
-            "Automated deadline reminder sent for Buildspace AI Sprint 2025 cutoff.",
+            "Automated deadline reminder sent for your upcoming hackathon cutoff.",
           readAt: null,
           createdAt: "Just now",
         };
@@ -157,61 +129,73 @@ export default function NotificationsManager() {
           <span>Sorted by newest</span>
         </div>
 
-        {notifications.map((notif) => {
-          const isUnread = !notif.readAt;
-          return (
-            <div
-              key={notif.id}
-              onClick={() => toggleRead(notif.id)}
-              className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-4 ${
-                isUnread
-                  ? "bg-surface-container border-outline-variant/50 shadow-sm"
-                  : "bg-surface-container-low border-outline-variant/20 opacity-75"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                    notif.type === "deadline"
-                      ? "bg-error-container/20 text-error"
-                      : notif.type === "invite"
-                      ? "bg-secondary-container/20 text-secondary"
-                      : "bg-primary-container/20 text-primary"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">
-                    {notif.type === "deadline"
-                      ? "timer"
-                      : notif.type === "invite"
-                      ? "group_add"
-                      : "mail"}
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-on-surface">
-                      {notif.title}
-                    </h4>
-                    {isUnread && (
-                      <span className="w-2 h-2 rounded-full bg-secondary shrink-0"></span>
-                    )}
+        {notifications.length === 0 ? (
+          <div className="p-12 rounded-2xl bg-surface-container-low border border-dashed border-outline-variant/30 text-center flex flex-col items-center justify-center gap-2">
+            <span className="material-symbols-outlined text-4xl text-outline/50">
+              notifications_off
+            </span>
+            <h3 className="text-base font-bold text-on-surface">No notifications yet</h3>
+            <p className="text-xs text-outline max-w-sm">
+              You&apos;re completely caught up! Competition reminders and squad invitations will appear here.
+            </p>
+          </div>
+        ) : (
+          notifications.map((notif) => {
+            const isUnread = !notif.readAt;
+            return (
+              <div
+                key={notif.id}
+                onClick={() => toggleRead(notif.id)}
+                className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-4 ${
+                  isUnread
+                    ? "bg-surface-container border-outline-variant/50 shadow-sm"
+                    : "bg-surface-container-low border-outline-variant/20 opacity-75"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                      notif.type === "deadline"
+                        ? "bg-error-container/20 text-error"
+                        : notif.type === "invite"
+                        ? "bg-secondary-container/20 text-secondary"
+                        : "bg-primary-container/20 text-primary"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      {notif.type === "deadline"
+                        ? "timer"
+                        : notif.type === "invite"
+                        ? "group_add"
+                        : "mail"}
+                    </span>
                   </div>
-                  <p className="text-xs text-on-surface-variant leading-relaxed">
-                    {notif.message}
-                  </p>
-                  <span className="font-mono text-[10px] text-outline mt-1">
-                    {String(notif.createdAt)}
-                  </span>
-                </div>
-              </div>
 
-              <span className="material-symbols-outlined text-outline text-sm shrink-0">
-                {isUnread ? "mark_email_unread" : "drafts"}
-              </span>
-            </div>
-          );
-        })}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-on-surface">
+                        {notif.title}
+                      </h4>
+                      {isUnread && (
+                        <span className="w-2 h-2 rounded-full bg-secondary shrink-0"></span>
+                      )}
+                    </div>
+                    <p className="text-xs text-on-surface-variant leading-relaxed">
+                      {notif.message}
+                    </p>
+                    <span className="font-mono text-[10px] text-outline mt-1">
+                      {String(notif.createdAt)}
+                    </span>
+                  </div>
+                </div>
+
+                <span className="material-symbols-outlined text-outline text-sm shrink-0">
+                  {isUnread ? "mark_email_unread" : "drafts"}
+                </span>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

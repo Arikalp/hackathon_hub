@@ -18,12 +18,19 @@ export default function WorkspaceSidebar({
   setCurrentTab,
   mobileOpen,
   setMobileOpen,
-  activeTeamName = "NovaLogic Squad",
+  activeTeamName = "No Team Selected",
 }: WorkspaceSidebarProps) {
   const { user, userProfile, signOutUser } = useAuth();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
-  const navItems = [
+  interface NavItem {
+    id: string;
+    label: string;
+    icon: string;
+    badge?: string;
+  }
+
+  const navItems: NavItem[] = [
     { id: "overview", label: "Overview", icon: "dashboard" },
     { id: "my-teams", label: "My Teams", icon: "groups" },
     { id: "hackathon-tracker", label: "Hackathon Tracker", icon: "trophy" },
@@ -32,20 +39,21 @@ export default function WorkspaceSidebar({
       id: "notifications",
       label: "Notifications",
       icon: "notifications",
-      badge: "3",
     },
     { id: "achievements", label: "Achievements", icon: "military_tech" },
     { id: "settings", label: "Settings", icon: "tune" },
   ];
 
-  const displayName = userProfile?.displayName || user?.displayName || "alex.dev";
+  const displayName =
+    userProfile?.displayName ||
+    user?.displayName ||
+    (user?.email ? user.email.split("@")[0] : "Builder");
   const userHandle = userProfile?.username
     ? `@${userProfile.username}`
-    : "@alexrivera.eth";
-  const photo =
-    userProfile?.photoURL ||
-    user?.photoURL ||
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuBhiT-fS94BgDyhLpMJDlYKntQwDTUm9GXRHoiVTosSsB4dJcFlgij98ihCIA9eKt4Daqmt9AkiE0ly81jiXp5M6Dkn-fdqXxDh4fPTqH--D47WprzLQh2giEixqyAfOE4ZgDWE4h-rdqj9xSrFPAiyIgZrygAKd8SnJd7o53Rv4wtTqCertqG-fVNtRjNzvCfAduj-ZphmsOI8FXpM_acjUFkqhLVJxIjXT_TYDk2UCe-3HLHmYX8k";
+    : user?.email
+    ? `@${user.email.split("@")[0]}`
+    : "@builder";
+  const photo = userProfile?.photoURL || user?.photoURL || null;
 
   return (
     <>
@@ -201,13 +209,19 @@ export default function WorkspaceSidebar({
               className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
             >
               <div className="relative flex-shrink-0">
-                <Image
-                  src={photo}
-                  alt="Profile"
-                  width={36}
-                  height={36}
-                  className="w-9 h-9 rounded-full object-cover ring-1 ring-outline-variant/40 group-hover:ring-primary/60 transition-all"
-                />
+                {photo ? (
+                  <Image
+                    src={photo}
+                    alt="Profile"
+                    width={36}
+                    height={36}
+                    className="w-9 h-9 rounded-full object-cover ring-1 ring-outline-variant/40 group-hover:ring-primary/60 transition-all"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-primary/20 text-primary font-mono font-bold text-xs flex items-center justify-center ring-1 ring-outline-variant/40">
+                    {displayName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface-container-low"></span>
               </div>
               <div className="flex flex-col min-w-0">

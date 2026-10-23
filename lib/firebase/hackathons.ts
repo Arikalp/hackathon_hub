@@ -95,3 +95,62 @@ export async function deleteTeamHackathon(
   const ref = doc(db, "teams", teamId, "hackathons", hackathonId);
   await deleteDoc(ref);
 }
+
+// -------------------------------------------------------------
+// Workspace HackathonRecord Cloud Persistence & Synchronization
+// -------------------------------------------------------------
+import type { HackathonRecord } from "../../app/workspace/components/AddHackathonModal";
+
+// Save or Update a HackathonRecord to Firestore under users/{uid}/hackathons/{id}
+export async function saveHackathonRecord(
+  uid: string,
+  record: HackathonRecord
+): Promise<void> {
+  if (!uid || uid === "guest") return;
+  try {
+    const ref = doc(db, "users", uid, "hackathons", record.id);
+    await setDoc(
+      ref,
+      {
+        ...record,
+        userId: uid,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn("Firestore sync warning during hackathon save (local cache used):", err);
+  }
+}
+
+// Fetch all HackathonRecords for a user from Firestore
+export async function getUserHackathonRecords(
+  uid: string
+): Promise<HackathonRecord[]> {
+  if (!uid || uid === "guest") return [];
+  try {
+    const snap = await getDocs(collection(db, "users", uid, "hackathons"));
+    const records: HackathonRecord[] = [];
+    snap.forEach((d) => {
+      records.push({ id: d.id, ...d.data() } as HackathonRecord);
+    });
+    return records;
+  } catch (err) {
+    console.warn("Firestore sync warning during hackathon fetch (local cache used):", err);
+    return [];
+  }
+}
+
+// Delete a HackathonRecord from Firestore
+export async function deleteHackathonRecord(
+  uid: string,
+  hackathonId: string
+): Promise<void> {
+  if (!uid || uid === "guest" || !hackathonId) return;
+  try {
+    const ref = doc(db, "users", uid, "hackathons", hackathonId);
+    await deleteDoc(ref);
+  } catch (err) {
+    console.warn("Firestore sync warning during hackathon delete:", err);
+  }
+}

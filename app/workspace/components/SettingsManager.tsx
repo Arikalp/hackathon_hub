@@ -61,7 +61,7 @@ export default function SettingsManager() {
               Current Username
             </span>
             <span className="font-mono text-sm font-bold text-primary">
-              @{userProfile?.username || "alexrivera.eth"}
+              @{userProfile?.username || (user?.email ? user.email.split("@")[0] : "not_claimed")}
             </span>
           </div>
 
@@ -70,7 +70,7 @@ export default function SettingsManager() {
               Registered Email
             </span>
             <span className="font-mono text-sm text-on-surface truncate block">
-              {user?.email || "alex@novalogic.dev"}
+              {user?.email || "No email linked"}
             </span>
           </div>
         </div>

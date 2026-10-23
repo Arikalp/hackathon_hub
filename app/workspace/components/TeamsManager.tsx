@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Team, TeamMember, createTeam, inviteTeammate } from "../../../lib/firebase/teams";
 import { useAuth } from "../../../lib/auth/AuthContext";
@@ -27,42 +27,33 @@ export default function TeamsManager({
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [inviteSuccess, setInviteSuccess] = useState(false);
 
-  // Demo members for default display
-  const demoMembers: TeamMember[] = [
-    {
-      uid: user?.uid || "user-1",
-      displayName: userProfile?.displayName || user?.displayName || "Alex Rivera",
-      email: user?.email || "alex@novalogic.dev",
-      role: "owner",
-      photoURL:
-        user?.photoURL ||
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuDb2DzUVxovw9ASgtQ7-MpBY1-cEjFTR1xa8XNV3QOGJt1uKup9ZZAWwGZzrw-73DUoQ1Cd26PYeslNemQxb01iwPBqA0A7XH_cqpZlu0VbuxezDvXeC4rplJwRapopoeF58l0klgUCA1aOjBKQbNWrwOA0vlWTuYEHtxghLhekHUHmlqIx73ZBGHOZtykq1jQUyVICldOfBBgzx87xnUCs5Kt88hIHRcN7mTnRmYjT6U52a4PXLRNB",
-    },
-    {
-      uid: "user-2",
-      displayName: "Maya Chen",
-      email: "maya@novalogic.dev",
-      role: "admin",
-      photoURL:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuBJYxOpHYFUsNtx7yCHuLfm7SBLPUR4etdSyeEcNMOn5zCI8Kfrpdno-0Ui7Xq6-PRp487G1iffBETIbAog0Ifi7ES69Dm8Hly-QDn7jPhCwVO3hDjSJUj8MbauMPZNd1GEz6m3QHYzfb76M5MtmxWjRUiUg6lXaWnhrhcNpt4a411iMQLEAkzdULTEXvbRz2ORCKHmQ8Xobfi1cwd1API6yl9JRfP77gPSh-Y0AU-H3bLseVfb7mPj",
-    },
-    {
-      uid: "user-3",
-      displayName: "Liam Vance",
-      email: "liam@novalogic.dev",
-      role: "member",
-      photoURL:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuCqsripXfRb9frwH_FBBFaaA3Rl9Hd2JbtvJU8vXLIs5AoY7v3qGMpv1vkGX8Ld2Tc1rCKB1SFA_4qCCYjoolk17UhDwY_KtW5tRo9yz-O_PMbZFgbt4idNoepEdRSUXR-RCorSDw3075xefJJRdo7DrA5sAD4pnNV7Bajxd8qrfZVISfvQQ8OflBkfmOItO1-jd2pyk7_WboixrZE-DOXLo8h5YrUVhreuFo_TdH4DMCPMNQYtXoAn",
-    },
-    {
-      uid: "user-4",
-      displayName: "Sofia Ramos",
-      email: "sofia@novalogic.dev",
-      role: "member",
-      photoURL:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuCzGs0-FlDJv2oDbGzuG8iknQ_9jyobl4Gu4qPH2R5jANocpKVZM8NiQN3Yl4uV8zwhOCqtDDe2_NzQBLGX6VhPhZPJtvdhq4GuUEfHBIQcR_tFjIptjrmNh2VkeYCSUbvxTDqhaNBGcuoEJoPXuFOdQvamF_7X6Lns8FQlr29pe4XEnB-xYO9Bd53ziLNLnkyKfkHLGc1Yi0nz7ADNz3JVs2ut6x0sz0ivIOspyyNAf9tvfYUFtNzC",
-    },
-  ];
+  // Dynamic roster per team
+  const [teamMembersMap, setTeamMembersMap] = useState<Record<string, TeamMember[]>>({});
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("hh_team_members");
+      if (stored) {
+        setTeamMembersMap(JSON.parse(stored));
+      }
+    } catch {}
+  }, []);
+
+  const defaultOwner: TeamMember = {
+    uid: user?.uid || "owner-1",
+    displayName:
+      userProfile?.displayName ||
+      user?.displayName ||
+      (user?.email ? user.email.split("@")[0] : "Team Owner"),
+    email: user?.email || "owner@builder.io",
+    role: "owner",
+    photoURL: userProfile?.photoURL || user?.photoURL || undefined,
+  };
+
+  const currentMembers: TeamMember[] =
+    activeTeam && teamMembersMap[activeTeam.id]
+      ? teamMembersMap[activeTeam.id]
+      : [defaultOwner];
 
   const handleCreateTeam = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,6 +108,24 @@ export default function TeamsManager({
       console.warn("Invitation simulated:", err);
     }
 
+    const newMember: TeamMember = {
+      uid: "member-" + Date.now(),
+      displayName: inviteEmail.split("@")[0],
+      email: inviteEmail.trim(),
+      role: inviteRole,
+      photoURL: undefined,
+    };
+    setTeamMembersMap((prev) => {
+      const updated = {
+        ...prev,
+        [activeTeam.id]: [...(prev[activeTeam.id] || [defaultOwner]), newMember],
+      };
+      try {
+        localStorage.setItem("hh_team_members", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     setInviteSuccess(true);
     setTimeout(() => {
       setInviteSuccess(false);
@@ -153,22 +162,43 @@ export default function TeamsManager({
       </div>
 
       {/* Teams Tabs / Selector */}
-      <div className="flex items-center gap-3 overflow-x-auto pb-2">
-        {teams.map((t) => (
+      {teams.length > 0 && (
+        <div className="flex items-center gap-3 overflow-x-auto pb-2">
+          {teams.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTeam(t)}
+              className={`px-4 py-2.5 rounded-xl font-mono text-xs font-semibold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
+                activeTeam?.id === t.id
+                  ? "bg-surface-container-high text-primary border border-primary/40 shadow-sm"
+                  : "bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container border border-outline-variant/30"
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">hub</span>
+              <span>{t.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Empty State when no teams exist */}
+      {teams.length === 0 && (
+        <div className="p-12 rounded-2xl bg-surface-container-low border border-dashed border-outline-variant/30 text-center flex flex-col items-center justify-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-outline">
+            groups_3
+          </span>
+          <h3 className="text-lg font-bold text-on-surface">No squads created yet</h3>
+          <p className="text-xs text-outline max-w-md">
+            Create your first builder team to invite collaborators, organize roles, and track competition squads together.
+          </p>
           <button
-            key={t.id}
-            onClick={() => setActiveTeam(t)}
-            className={`px-4 py-2.5 rounded-xl font-mono text-xs font-semibold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeTeam?.id === t.id
-                ? "bg-surface-container-high text-primary border border-primary/40 shadow-sm"
-                : "bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container border border-outline-variant/30"
-            }`}
+            onClick={() => setShowCreateModal(true)}
+            className="mt-2 px-4 py-2 rounded-xl bg-primary-container text-on-primary-container text-xs font-semibold cursor-pointer hover:bg-primary hover:text-on-primary transition-colors"
           >
-            <span className="material-symbols-outlined text-sm">hub</span>
-            <span>{t.name}</span>
+            + Create Your First Team
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* Active Team Detail Card */}
       {activeTeam && (
@@ -179,14 +209,16 @@ export default function TeamsManager({
                 <span className="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-mono text-[10px] font-bold uppercase">
                   ACTIVE SQUAD
                 </span>
-                <span className="text-outline text-xs font-mono">• 4 Builders</span>
+                <span className="text-outline text-xs font-mono">
+                  • {currentMembers.length} Builder{currentMembers.length === 1 ? "" : "s"}
+                </span>
               </div>
               <h2 className="text-2xl font-bold text-on-surface">
                 {activeTeam.name}
               </h2>
               <p className="text-sm text-on-surface-variant mt-1">
                 {activeTeam.description ||
-                  "Competitive multimodal AI agents, decentralized compute & rapid fullstack prototypes."}
+                  "Active competition squad ready for hackathon sprints."}
               </p>
             </div>
 
@@ -208,23 +240,26 @@ export default function TeamsManager({
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {demoMembers.map((m) => (
+              {currentMembers.map((m) => (
                 <div
                   key={m.uid}
                   className="p-4 rounded-xl bg-surface-container border border-outline-variant/20 flex items-center justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative w-10 h-10 rounded-full overflow-hidden ring-1 ring-outline-variant/40 shrink-0">
-                      <Image
-                        src={
-                          m.photoURL ||
-                          "https://lh3.googleusercontent.com/aida-public/AB6AXuBhiT-fS94BgDyhLpMJDlYKntQwDTUm9GXRHoiVTosSsB4dJcFlgij98ihCIA9eKt4Daqmt9AkiE0ly81jiXp5M6Dkn-fdqXxDh4fPTqH--D47WprzLQh2giEixqyAfOE4ZgDWE4h-rdqj9xSrFPAiyIgZrygAKd8SnJd7o53Rv4wtTqCertqG-fVNtRjNzvCfAduj-ZphmsOI8FXpM_acjUFkqhLVJxIjXT_TYDk2UCe-3HLHmYX8k"
-                        }
-                        alt={m.displayName || "Member"}
-                        width={40}
-                        height={40}
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="relative w-10 h-10 rounded-full overflow-hidden ring-1 ring-outline-variant/40 shrink-0 bg-surface-container-highest flex items-center justify-center">
+                      {m.photoURL ? (
+                        <Image
+                          src={m.photoURL}
+                          alt={m.displayName || "Member"}
+                          width={40}
+                          height={40}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="font-mono font-bold text-primary text-sm uppercase">
+                          {m.displayName ? m.displayName.slice(0, 2) : "TM"}
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className="text-sm font-semibold text-on-surface truncate">
