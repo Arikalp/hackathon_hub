@@ -19,10 +19,15 @@ export default function OnboardingPage() {
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
-    } else if (userProfile?.username && !username) {
-      setUsername(userProfile.username);
+    if (!loading) {
+      if (!user) {
+        router.push("/login");
+      } else if (userProfile?.username) {
+        // Username already claimed — onboarding is a one-time step
+        router.replace("/workspace");
+      } else if (userProfile?.username && !username) {
+        setUsername(userProfile.username);
+      }
     }
   }, [user, userProfile, loading, router, username]);
 

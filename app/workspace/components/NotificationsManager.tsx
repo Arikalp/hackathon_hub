@@ -1,30 +1,92 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../../lib/auth/AuthContext";
-import { AppNotification } from "../../../lib/firebase/notifications";
+import {
+  AppNotification,
+  getUserNotifications,
+  markNotificationAsRead,
+  createUserNotification,
+} from "../../../lib/firebase/notifications";
+
+// Format Firestore timestamps / ISO strings for display
+function formatCreatedAt(createdAt: unknown): string {
+  if (!createdAt) return "";
+  if (
+    typeof createdAt === "object" &&
+    createdAt !== null &&
+    "seconds" in createdAt
+  ) {
+    return new Date((createdAt as { seconds: number }).seconds * 1000).toLocaleString();
+  }
+  return String(createdAt);
+}
 
 export default function NotificationsManager() {
   const { user } = useAuth();
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [loadingFeed, setLoadingFeed] = useState(true);
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  const toggleRead = (id: string) => {
+  // Load the persistent feed from Firestore for signed-in users
+  useEffect(() => {
+    if (!user?.uid) {
+      setNotifications([]);
+      setLoadingFeed(false);
+      return;
+    }
+    let isMounted = true;
+    getUserNotifications(user.uid)
+      .then((cloudNotifs) => {
+        if (!isMounted) return;
+        cloudNotifs.sort((a, b) => {
+          const toMillis = (t: unknown): number =>
+            t && typeof t === "object" && "seconds" in t
+              ? (t as { seconds: number }).seconds * 1000
+              : 0;
+          return toMillis(b.createdAt) - toMillis(a.createdAt);
+        });
+        setNotifications(cloudNotifs);
+      })
+      .catch((err) => console.warn("Could not load notifications:", err))
+      .finally(() => {
+        if (isMounted) setLoadingFeed(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid]);
+
+  const toggleRead = (notif: AppNotification) => {
+    const isNowRead = !notif.readAt;
     setNotifications((prev) =>
       prev.map((n) =>
-        n.id === id
-          ? { ...n, readAt: n.readAt ? null : new Date().toISOString() }
+        n.id === notif.id
+          ? { ...n, readAt: isNowRead ? new Date().toISOString() : null }
           : n
       )
     );
+    // Persist read state to Firestore
+    if (user?.uid && isNowRead) {
+      markNotificationAsRead(user.uid, notif.id).catch((err) =>
+        console.warn("Could not mark notification read:", err)
+      );
+    }
   };
 
   const markAllRead = () => {
     setNotifications((prev) =>
-      prev.map((n) => ({ ...n, readAt: new Date().toISOString() }))
+      prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() }))
     );
+    if (user?.uid) {
+      notifications
+        .filter((n) => !n.readAt)
+        .forEach((n) => {
+          markNotificationAsRead(user.uid, n.id).catch(() => {});
+        });
+    }
   };
 
   const handleTriggerEmailReminder = async () => {
@@ -47,22 +109,34 @@ export default function NotificationsManager() {
       const data = await res.json();
       if (res.ok) {
         setTestResult(
-          `✓ Nodemailer dispatch simulated successfully to ${
+          `✓ Reminder email dispatched successfully to ${
             user?.email || "registered address"
-          }!`
+          }. Check your inbox!`
         );
 
-        // Add a new in-app notification
+        // Persist an in-app notification for this dispatch (not for guest demo users)
         const newNotif: AppNotification = {
           id: "notif-" + Date.now(),
-          type: "reminder",
-          title: "Scheduled Email Reminder Dispatched",
-          message:
-            "Automated deadline reminder sent for your upcoming hackathon cutoff.",
+          type: "deadline" as const,
+          title: "Email Reminder Dispatched",
+          message: `Deadline reminder for "Upcoming Hackathon Sprint" sent to ${
+            user?.email || "your registered email"
+          }.`,
           readAt: null,
           createdAt: "Just now",
         };
         setNotifications((prev) => [newNotif, ...prev]);
+        if (user?.uid) {
+          try {
+            await createUserNotification(user.uid, {
+              type: "deadline",
+              title: newNotif.title,
+              message: newNotif.message,
+            });
+          } catch (err) {
+            console.warn("Could not persist notification:", err);
+          }
+        }
       } else {
         setTestResult(`Error: ${data.message}`);
       }
@@ -129,7 +203,14 @@ export default function NotificationsManager() {
           <span>Sorted by newest</span>
         </div>
 
-        {notifications.length === 0 ? (
+        {loadingFeed ? (
+          <div className="p-12 rounded-2xl bg-surface-container-low border border-dashed border-outline-variant/30 text-center flex flex-col items-center justify-center gap-2">
+            <span className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+            <span className="text-xs font-mono text-outline">
+              Loading your notification feed...
+            </span>
+          </div>
+        ) : notifications.length === 0 ? (
           <div className="p-12 rounded-2xl bg-surface-container-low border border-dashed border-outline-variant/30 text-center flex flex-col items-center justify-center gap-2">
             <span className="material-symbols-outlined text-4xl text-outline/50">
               notifications_off
@@ -145,7 +226,7 @@ export default function NotificationsManager() {
             return (
               <div
                 key={notif.id}
-                onClick={() => toggleRead(notif.id)}
+                onClick={() => toggleRead(notif)}
                 className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-4 ${
                   isUnread
                     ? "bg-surface-container border-outline-variant/50 shadow-sm"
@@ -184,7 +265,7 @@ export default function NotificationsManager() {
                       {notif.message}
                     </p>
                     <span className="font-mono text-[10px] text-outline mt-1">
-                      {String(notif.createdAt)}
+                      {formatCreatedAt(notif.createdAt)}
                     </span>
                   </div>
                 </div>

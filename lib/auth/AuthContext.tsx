@@ -78,8 +78,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch or refresh user profile from Firestore with local cache fallback
-  const fetchUserProfile = async (uid: string) => {
+  // Fetch or refresh user profile from Firestore with local cache fallback.
+  // If the profile document does not exist yet (first sign-in), create it so
+  // the onboarding/username screen is only ever shown once.
+  const fetchUserProfile = async (uid: string, basic?: Partial<UserProfile>) => {
     try {
       const cached = localStorage.getItem(`hh_profile_${uid}`);
       if (cached) {
@@ -95,6 +97,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUserProfile(profileData);
         try {
           localStorage.setItem(`hh_profile_${uid}`, JSON.stringify(profileData));
+        } catch {}
+      } else {
+        // First ever sign-in: create the base profile document
+        const initialProfile: Partial<UserProfile> = cleanFirestoreData({
+          uid,
+          email: basic?.email || "",
+          displayName: basic?.displayName || "",
+          photoURL: basic?.photoURL || "",
+          username: "",
+          usernameNormalized: "",
+          bio: "",
+          skills: [],
+          githubUrl: "",
+          linkedinUrl: "",
+          portfolioUrl: "",
+          notificationPreferences: {
+            emailReminders: true,
+            deadlineAlerts: true,
+            teamInvites: true,
+          },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        await setDoc(userRef, initialProfile, { merge: true });
+        const created = { ...initialProfile, uid } as UserProfile;
+        setUserProfile(created);
+        try {
+          localStorage.setItem(`hh_profile_${uid}`, JSON.stringify(created));
         } catch {}
       }
     } catch (err) {
@@ -144,7 +174,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        await fetchUserProfile(currentUser.uid);
+        await fetchUserProfile(currentUser.uid, {
+          email: currentUser.email || "",
+          displayName: currentUser.displayName || "",
+          photoURL: currentUser.photoURL || "",
+        });
       } else {
         setUserProfile(null);
       }
@@ -158,7 +192,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
-        await fetchUserProfile(result.user.uid);
+        await fetchUserProfile(result.user.uid, {
+          email: result.user.email || "",
+          displayName: result.user.displayName || "",
+          photoURL: result.user.photoURL || "",
+        });
       }
     } catch (error) {
       console.error("Google sign in error:", error);
@@ -170,7 +208,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, pass);
       if (result.user) {
-        await fetchUserProfile(result.user.uid);
+        await fetchUserProfile(result.user.uid, {
+          email: result.user.email || "",
+          displayName: result.user.displayName || "",
+          photoURL: result.user.photoURL || "",
+        });
       }
     } catch (error) {
       console.error("Email sign in error:", error);
@@ -189,7 +231,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await updateProfile(result.user, { displayName });
       }
       if (result.user) {
-        await fetchUserProfile(result.user.uid);
+        if (displayName) {
+          await updateProfile(result.user, { displayName });
+        }
+        await fetchUserProfile(result.user.uid, {
+          email: result.user.email || "",
+          displayName: displayName || result.user.displayName || "",
+          photoURL: result.user.photoURL || "",
+        });
       }
     } catch (error) {
       console.error("Email sign up error:", error);

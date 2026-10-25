@@ -15,9 +15,13 @@ import {
   deleteHackathonRecord,
 } from "../../lib/firebase/hackathons";
 import { useAuth } from "../../lib/auth/AuthContext";
+import { createUserNotification } from "../../lib/firebase/notifications";
+
+// Thresholds (in days) at which a deadline reminder email is dispatched
+const REMINDER_THRESHOLDS = [7, 3, 1];
 
 export default function WorkspacePage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [currentTab, setCurrentTab] = useState("overview");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -116,6 +120,71 @@ export default function WorkspacePage() {
       isMounted = false;
     };
   }, [user?.uid, hacksKey, teamsKey]);
+
+  // 3. Automatic email reminders: when a tracked hackathon's deadline is
+  // 7, 3 or 1 days away, dispatch an email (respects notification preferences
+  // and never sends the same reminder twice via a localStorage idempotency key).
+  useEffect(() => {
+    if (!user?.uid || hackathons.length === 0) return;
+
+    const prefs = userProfile?.notificationPreferences;
+    if (
+      prefs &&
+      prefs.emailReminders === false &&
+      prefs.deadlineAlerts === false
+    ) {
+      return;
+    }
+
+    const dispatchDueReminders = async () => {
+      for (const hack of hackathons) {
+        const days = Number(hack.remainingDays);
+        const status = (hack.status || "").toLowerCase();
+
+        if (!REMINDER_THRESHOLDS.includes(days)) continue;
+        if (status === "cancelled" || status === "completed") continue;
+
+        const dedupeKey = `hh_reminder_${user.uid}_${hack.id}_${days}`;
+        try {
+          if (localStorage.getItem(dedupeKey)) continue;
+        } catch {}
+
+        try {
+          const res = await fetch("/api/reminders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: user.email || "",
+              name:
+                userProfile?.displayName ||
+                user.displayName ||
+                (user.email ? user.email.split("@")[0] : "Builder"),
+              hackathonName: hack.name,
+              deadlineText: hack.deadlineText || hack.dates,
+              daysLeft: days,
+            }),
+          });
+
+          if (res.ok) {
+            try {
+              localStorage.setItem(dedupeKey, "1");
+            } catch {}
+            try {
+              await createUserNotification(user.uid, {
+                type: "deadline",
+                title: `Reminder sent: ${hack.name}`,
+                message: `An email reminder was dispatched for the ${hack.name} deadline in ${days} day${days === 1 ? "" : "s"}.`,
+              });
+            } catch {}
+          }
+        } catch (err) {
+          console.warn("Reminder dispatch failed:", err);
+        }
+      }
+    };
+
+    dispatchDueReminders();
+  }, [user?.uid, userProfile?.notificationPreferences, hackathons]);
 
   const handleOpenAddModal = () => {
     setEditingHackathon(null);

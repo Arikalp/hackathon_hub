@@ -58,6 +58,49 @@ export async function sendEmailReminder({
   }
 }
 
+// Generate styled HTML template for a team invitation email
+export function generateInviteHtml({
+  inviterName,
+  teamName,
+  role,
+  inviteeEmail,
+  actionUrl,
+}: {
+  inviterName: string;
+  teamName: string;
+  role: string;
+  inviteeEmail: string;
+  actionUrl: string;
+}): string {
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #111318; color: #e2e2e9; padding: 32px 16px; border-radius: 12px; max-width: 580px; margin: 0 auto;">
+      <div style="border-bottom: 1px solid #494454; padding-bottom: 16px; margin-bottom: 24px;">
+        <span style="font-weight: 700; font-size: 18px; color: #d0bcff;">Hackathon Hub</span>
+        <span style="color: #a8d54c; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-left: 8px;">Team Invitation</span>
+      </div>
+      <h2 style="color: #e2e2e9; font-size: 22px; margin-top: 0;">You've been invited!</h2>
+      <p style="color: #cbc3d7; font-size: 15px; line-height: 1.6;">
+        <strong style="color: #ffffff;">${inviterName}</strong> has invited you to join the hackathon team
+        <strong style="color: #d0bcff;">${teamName}</strong> as a
+        <span style="color: #a8d54c; font-weight: bold;">${role}</span>.
+      </p>
+      <div style="background-color: #1e1f25; border: 1px solid #494454; border-radius: 8px; padding: 16px; margin: 24px 0;">
+        <p style="margin: 0; font-size: 14px; color: #cbc3d7;"><strong>Team:</strong> ${teamName}</p>
+        <p style="margin: 8px 0 0 0; font-size: 14px; color: #cbc3d7;"><strong>Invited user:</strong> ${inviteeEmail}</p>
+        <p style="margin: 8px 0 0 0; font-size: 14px; color: #cbc3d7;"><strong>Role:</strong> ${role}</p>
+      </div>
+      <p style="color: #cbc3d7; font-size: 14px; line-height: 1.6;">
+        Sign in to Hackathon Hub with this email address (<strong>${inviteeEmail}</strong>) and open your Workspace to
+        accept or decline the invitation from the Teams page.
+      </p>
+      <a href="${actionUrl}" style="display: inline-block; background-color: #a078ff; color: #340080; font-weight: 600; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 14px;">Open Team Workspace</a>
+      <p style="color: #958ea0; font-size: 12px; margin-top: 32px; border-top: 1px solid #282a2f; padding-top: 16px;">
+        You received this email because you were invited to a team on Hackathon Hub. Manage notification preferences in your dashboard settings.
+      </p>
+    </div>
+  `;
+}
+
 // Generate styled HTML template for hackathon deadline reminder
 export function generateDeadlineReminderHtml({
   recipientName,

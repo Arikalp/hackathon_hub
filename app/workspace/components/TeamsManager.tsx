@@ -1,15 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import {
   Team,
   TeamMember,
+  TeamInvitation,
   createTeam,
   inviteTeammate,
-  saveTeamMember,
   getTeamMembers,
+  getTeamPendingInvitations,
+  getUserPendingInvitations,
+  acceptTeamInvitation,
+  setInvitationStatus,
+  findUserUidByEmail,
 } from "../../../lib/firebase/teams";
+import { createUserNotification } from "../../../lib/firebase/notifications";
 import { uploadTeamLogo } from "../../../lib/firebase/storage";
 import { useAuth } from "../../../lib/auth/AuthContext";
 
@@ -35,7 +41,15 @@ export default function TeamsManager({
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
-  const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState("");
+  const [sendingInvite, setSendingInvite] = useState(false);
+
+  // Pending invitations for the active team (shown on the roster)
+  const [teamPendingInvites, setTeamPendingInvites] = useState<TeamInvitation[]>([]);
+  // Pending invitations addressed to the signed-in user
+  const [myInvitations, setMyInvitations] = useState<TeamInvitation[]>([]);
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
 
   // Dynamic roster per team
   const [teamMembersMap, setTeamMembersMap] = useState<Record<string, TeamMember[]>>({});
@@ -69,6 +83,25 @@ export default function TeamsManager({
       console.warn("Could not fetch team members from Firestore:", err);
     });
   }, [activeTeam?.id]);
+
+  // Fetch pending invitations for the active team and for the signed-in user
+  const refreshInvitations = useCallback(() => {
+    if (activeTeam?.id) {
+      getTeamPendingInvitations(activeTeam.id)
+        .then(setTeamPendingInvites)
+        .catch((err) => console.warn("Could not fetch team invites:", err));
+    }
+    const userEmail = user?.email;
+    if (userEmail) {
+      getUserPendingInvitations(userEmail)
+        .then(setMyInvitations)
+        .catch((err) => console.warn("Could not fetch your invites:", err));
+    }
+  }, [activeTeam?.id, user?.email]);
+
+  useEffect(() => {
+    refreshInvitations();
+  }, [refreshInvitations]);
 
   const defaultOwner: TeamMember = {
     uid: user?.uid || "owner-1",
@@ -130,48 +163,156 @@ export default function TeamsManager({
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim() || !activeTeam) return;
+    if (!inviteEmail.trim() || !activeTeam || sendingInvite) return;
+
+    setSendingInvite(true);
+    setInviteError("");
+    const email = inviteEmail.trim();
+    const inviterName =
+      userProfile?.displayName || user?.displayName || user?.email || "A builder";
 
     try {
-      await inviteTeammate(
+      // 1. Create the invitation record in Firestore
+      const result = await inviteTeammate(
         activeTeam.id,
         activeTeam.name,
-        inviteEmail.trim(),
+        email,
         inviteRole,
-        user?.uid || "guest"
+        user?.uid || "guest",
+        inviterName
       );
-    } catch (err) {
-      console.warn("Invitation simulated:", err);
-    }
 
-    const newMember: TeamMember = {
-      uid: "member-" + Date.now(),
-      displayName: inviteEmail.split("@")[0],
-      email: inviteEmail.trim(),
-      role: inviteRole,
-      photoURL: undefined,
-    };
+      if (result === "duplicate-pending") {
+        setInviteError("An invitation for this teammate is already pending.");
+        setSendingInvite(false);
+        return;
+      }
+      if (result === "duplicate-accepted") {
+        setInviteError("This teammate has already joined the team.");
+        setSendingInvite(false);
+        return;
+      }
 
-    // Sync member directly to Firestore
-    saveTeamMember(activeTeam.id, newMember).catch(() => {});
-
-    setTeamMembersMap((prev) => {
-      const updated = {
-        ...prev,
-        [activeTeam.id]: [...(prev[activeTeam.id] || [defaultOwner]), newMember],
-      };
+      // 2. Send the invitation email via the server (Nodemailer)
+      let emailSent = true;
+      let emailMessage = "";
       try {
-        localStorage.setItem("hh_team_members", JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+        const res = await fetch("/api/invitations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inviteeEmail: email,
+            teamId: activeTeam.id,
+            teamName: activeTeam.name,
+            role: inviteRole,
+            inviterName,
+            inviterEmail: user?.email || "",
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        emailSent = res.ok;
+        emailMessage = data.message || "";
+      } catch (err) {
+        console.warn("Invitation email dispatch failed:", err);
+        emailSent = false;
+        emailMessage = "Could not reach the email dispatch service.";
+      }
 
-    setInviteSuccess(true);
-    setTimeout(() => {
-      setInviteSuccess(false);
-      setShowInviteModal(false);
+      // 3. Create an in-app notification for the invitee if they are registered
+      try {
+        const inviteeUid = await findUserUidByEmail(email);
+        if (inviteeUid) {
+          await createUserNotification(inviteeUid, {
+            type: "invite",
+            title: `Invitation to join ${activeTeam.name}`,
+            message: `${inviterName} invited you to join "${activeTeam.name}" as a ${inviteRole}. Check the Teams page to accept or decline.`,
+            teamId: activeTeam.id,
+          });
+        }
+      } catch (notifErr) {
+        console.warn("Invitee notification failed:", notifErr);
+      }
+
+      // 4. Refresh the pending invite list on the roster
+      getTeamPendingInvitations(activeTeam.id)
+        .then(setTeamPendingInvites)
+        .catch(() => {});
+
+      setInviteSuccess(
+        emailSent
+          ? `Invitation emailed to ${email}.${emailMessage ? ` ${emailMessage}` : ""}`
+          : `Invitation saved, but the email could not be sent: ${emailMessage}`
+      );
       setInviteEmail("");
-    }, 1500);
+      setTimeout(() => {
+        setInviteSuccess(null);
+        setShowInviteModal(false);
+      }, 2500);
+    } catch (err: unknown) {
+      console.error("Invitation failed:", err);
+      setInviteError(
+        err instanceof Error
+          ? `Failed to create invitation: ${err.message}`
+          : "Failed to create invitation. Check Firestore rules and sign-in state."
+      );
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  // Accept a pending invitation addressed to the signed-in user
+  const handleAcceptInvitation = async (invitation: TeamInvitation) => {
+    if (!user) return;
+    setRespondingTo(invitation.id);
+    try {
+      await acceptTeamInvitation(
+        invitation,
+        user.uid,
+        userProfile?.displayName || user.displayName || user.email || undefined,
+        userProfile?.photoURL || user.photoURL || undefined
+      );
+
+      // Add the team to the workspace team list & make it active
+      const joinedTeam: Team = {
+        id: invitation.teamId,
+        name: invitation.teamName,
+        description: "",
+        ownerUid: invitation.createdBy,
+      };
+      onTeamCreated(joinedTeam);
+
+      setMyInvitations((prev) => prev.filter((i) => i.id !== invitation.id));
+      if (invitation.teamId === activeTeam?.id) {
+        getTeamPendingInvitations(invitation.teamId)
+          .then(setTeamPendingInvites)
+          .catch(() => {});
+        getTeamMembers(invitation.teamId).then((cloudMembers) => {
+          if (cloudMembers?.length && activeTeam) {
+            setTeamMembersMap((prev) => ({
+              ...prev,
+              [invitation.teamId]: cloudMembers,
+            }));
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Failed to accept invitation:", err);
+    } finally {
+      setRespondingTo(null);
+    }
+  };
+
+  // Decline a pending invitation addressed to the signed-in user
+  const handleDeclineInvitation = async (invitation: TeamInvitation) => {
+    setRespondingTo(invitation.id);
+    try {
+      await setInvitationStatus(invitation.id, "rejected");
+      setMyInvitations((prev) => prev.filter((i) => i.id !== invitation.id));
+    } catch (err) {
+      console.error("Failed to decline invitation:", err);
+    } finally {
+      setRespondingTo(null);
+    }
   };
 
   return (
@@ -338,6 +479,101 @@ export default function TeamsManager({
               ))}
             </div>
           </div>
+          {/* Pending Invitations for this team */}
+          {teamPendingInvites.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <h3 className="text-xs font-mono uppercase tracking-wider text-outline">
+                Awaiting Response ({teamPendingInvites.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {teamPendingInvites.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className="p-4 rounded-xl bg-surface-container-low border border-dashed border-outline-variant/40 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant/40 flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-outline">
+                          hourglass_top
+                        </span>
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-semibold text-on-surface-variant truncate">
+                          {inv.invitedEmail}
+                        </span>
+                        <span className="text-xs text-outline font-mono">
+                          Invited as {inv.role} • response pending
+                        </span>
+                      </div>
+                    </div>
+                    <span
+                      className={`font-mono text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
+                        inv.role === "admin"
+                          ? "bg-secondary/15 text-secondary border border-secondary/30"
+                          : "bg-surface-container-high text-outline border border-outline-variant/30"
+                      }`}
+                    >
+                      pending
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Invitations addressed to the signed-in user */}
+      {myInvitations.length > 0 && (
+        <div className="p-6 rounded-2xl bg-surface-container-low border border-secondary/40 flex flex-col gap-4">
+          <div>
+            <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined text-secondary text-xl">
+                mark_email_unread
+              </span>
+              Team Requests for You ({myInvitations.length})
+            </h3>
+            <p className="text-xs text-outline mt-1">
+              You have been invited to join the following squads. Accept to join their roster
+              or decline to dismiss.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {myInvitations.map((inv) => (
+              <div
+                key={inv.id}
+                className="p-4 rounded-xl bg-surface-container border border-outline-variant/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-on-surface truncate">
+                    {inv.teamName}
+                  </span>
+                  <span className="text-xs text-outline font-mono truncate">
+                    {inv.inviterName || "A builder"} invited you as {inv.role} •{" "}
+                    {inv.invitedEmail}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleAcceptInvitation(inv)}
+                    disabled={respondingTo === inv.id}
+                    className="px-3 py-1.5 rounded-lg bg-primary-container text-on-primary-container text-xs font-semibold hover:bg-primary hover:text-on-primary transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">check</span>
+                    <span>Accept</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeclineInvitation(inv)}
+                    disabled={respondingTo === inv.id}
+                    className="px-3 py-1.5 rounded-lg bg-surface-container-high text-on-surface-variant hover:text-error text-xs font-mono transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -447,11 +683,22 @@ export default function TeamsManager({
               Send an invitation link to your teammate&apos;s email address.
             </p>
             {inviteSuccess ? (
-              <div className="p-4 rounded-xl bg-secondary/15 border border-secondary/30 text-secondary text-center font-mono text-xs font-bold">
-                ✓ Invitation dispatched successfully!
+              <div className="p-4 rounded-xl bg-secondary/15 border border-secondary/30 text-secondary text-center font-mono text-xs font-bold flex items-start gap-2 text-left">
+                <span className="material-symbols-outlined text-base shrink-0">
+                  check_circle
+                </span>
+                <span className="text-left">{inviteSuccess}</span>
               </div>
             ) : (
               <form onSubmit={handleInvite} className="flex flex-col gap-4">
+                {inviteError && (
+                  <div className="p-3 rounded-xl bg-error-container/40 border border-error/40 text-error text-xs flex items-start gap-2">
+                    <span className="material-symbols-outlined text-base shrink-0">
+                      error
+                    </span>
+                    <span>{inviteError}</span>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-mono uppercase text-outline mb-1">
                     Teammate Email Address *
@@ -483,16 +730,23 @@ export default function TeamsManager({
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowInviteModal(false)}
+                    onClick={() => {
+                      setShowInviteModal(false);
+                      setInviteError("");
+                    }}
                     className="px-3 py-1.5 rounded-lg text-xs text-on-surface-variant hover:text-on-surface"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-primary-container text-on-primary-container text-xs font-semibold hover:bg-primary hover:text-on-primary transition-all"
+                    disabled={sendingInvite}
+                    className="px-4 py-2 rounded-xl bg-primary-container text-on-primary-container text-xs font-semibold hover:bg-primary hover:text-on-primary transition-all disabled:opacity-50 flex items-center gap-1.5"
                   >
-                    Send Invitation
+                    {sendingInvite && (
+                      <span className="w-3.5 h-3.5 border-2 border-on-primary-container border-t-transparent rounded-full animate-spin"></span>
+                    )}
+                    <span>{sendingInvite ? "Sending..." : "Send Invitation"}</span>
                   </button>
                 </div>
               </form>
