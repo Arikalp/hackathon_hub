@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../../../lib/auth/AuthContext";
-import { uploadUserProfileImage } from "../../../lib/firebase/storage";
 
 export default function SettingsManager() {
   const {
@@ -35,8 +34,6 @@ export default function SettingsManager() {
   const [teamInvites, setTeamInvites] = useState(true);
 
   // Upload & Save UI states
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [photoError, setPhotoError] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [preferencesSaving, setPreferencesSaving] = useState(false);
   const [syncingCloud, setSyncingCloud] = useState(false);
@@ -44,8 +41,6 @@ export default function SettingsManager() {
     text: string;
     type: "success" | "error";
   } | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize form fields from userProfile and user auth
   useEffect(() => {
@@ -127,45 +122,6 @@ export default function SettingsManager() {
     setTimeout(() => {
       setStatusMessage(null);
     }, 3500);
-  };
-
-  // Upload new avatar directly to Firebase Storage and update Firestore
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-
-    if (!file.type.startsWith("image/")) {
-      setPhotoError("Please select a valid image file (PNG, JPG, WebP).");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setPhotoError("Image size must be under 5MB.");
-      return;
-    }
-
-    setPhotoError("");
-    setUploadingPhoto(true);
-
-    try {
-      // 1. Upload to Firebase Storage bucket
-      const downloadURL = await uploadUserProfileImage(user.uid, file);
-
-      // 2. Sync to Firestore & Firebase Auth
-      await updateUserProfile({
-        photoURL: downloadURL,
-      });
-
-      showNotification("Profile avatar uploaded to Firebase Storage & synced!");
-    } catch (err: unknown) {
-      console.error("Avatar upload failed:", err);
-      showNotification("Failed to upload avatar to Firebase Storage.", "error");
-    } finally {
-      setUploadingPhoto(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
   };
 
   // Save Builder Identity to Firestore
@@ -348,7 +304,7 @@ export default function SettingsManager() {
         </div>
       </div>
 
-      {/* 1. Firebase Storage Avatar Section */}
+      {/* 1. Profile Avatar Display (read-only, no uploads) */}
       <div className="p-6 rounded-2xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-5">
         <div>
           <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
@@ -358,62 +314,26 @@ export default function SettingsManager() {
             Profile Photo &amp; Avatar
           </h2>
           <p className="text-xs text-outline mt-0.5">
-            Stored in Firebase Storage bucket and synced across all workspace views.
+            Your avatar comes from your Google sign-in account and is synced
+            across all workspace views. Image uploads are disabled on this
+            platform.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-6">
-          <div className="relative group">
-            <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-primary/40 bg-surface-container-high relative shadow-[0_0_15px_rgba(160,120,255,0.2)]">
-              <Image
-                src={currentPhotoURL}
-                alt={displayName || "Builder Avatar"}
-                width={96}
-                height={96}
-                className="w-full h-full object-cover"
-                unoptimized
-              />
-              {uploadingPhoto && (
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-1">
-                  <span className="material-symbols-outlined text-primary animate-spin text-2xl">
-                    progress_activity
-                  </span>
-                  <span className="text-[10px] font-mono text-primary font-bold">
-                    Uploading...
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2.5 items-center sm:items-start text-center sm:text-left">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handlePhotoUpload}
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
+        <div className="flex items-center gap-5">
+          <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-primary/40 bg-surface-container-high relative shadow-[0_0_15px_rgba(160,120,255,0.2)]">
+            <Image
+              src={currentPhotoURL}
+              alt={displayName || "Builder Avatar"}
+              width={80}
+              height={80}
+              className="w-full h-full object-cover"
+              unoptimized
             />
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingPhoto}
-                className="px-4 py-2 rounded-xl bg-primary-container text-on-primary-container hover:bg-primary hover:text-on-primary text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-[0_0_12px_rgba(160,120,255,0.3)] disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-base">
-                  cloud_upload
-                </span>
-                <span>{uploadingPhoto ? "Uploading..." : "Upload to Firebase Storage"}</span>
-              </button>
-            </div>
-            <p className="text-[11px] text-outline">
-              Recommended: Square PNG, JPG or WebP. Max 5MB. Uploads directly to Cloud Storage.
-            </p>
-            {photoError && (
-              <span className="text-xs text-error font-mono">{photoError}</span>
-            )}
           </div>
+          <span className="font-mono text-xs text-outline">
+            {user?.email || "No email linked"}
+          </span>
         </div>
       </div>
 

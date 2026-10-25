@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { uploadHackathonBanner } from "../../../lib/firebase/storage";
 
 export interface HackathonRecord {
   id: string;
@@ -63,8 +62,6 @@ export default function AddHackathonModal({
   const [teamName, setTeamName] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [bannerUrl, setBannerUrl] = useState("");
-  const [uploadingBanner, setUploadingBanner] = useState(false);
 
   const isEditing = Boolean(initialData);
 
@@ -82,7 +79,6 @@ export default function AddHackathonModal({
       setTeamName(initialData.teamName || activeTeamName || "Solo Squad");
       setDescription(initialData.description || "");
       setTags(initialData.tags?.join(", ") || "");
-      setBannerUrl(initialData.bannerUrl || "");
     } else {
       setName("");
       setOrganizer("");
@@ -96,7 +92,6 @@ export default function AddHackathonModal({
       setTeamName(activeTeamName || "Solo Squad");
       setDescription("");
       setTags("");
-      setBannerUrl("");
     }
   }, [initialData, isOpen, activeTeamName]);
 
@@ -131,7 +126,7 @@ export default function AddHackathonModal({
         "Building innovative full-stack application and competing for top prize pools.",
       teamName: teamName.trim() || activeTeamName || "Solo Squad",
       teamCount: initialData?.teamCount || "1/4",
-      bannerUrl: bannerUrl.trim() || "",
+      bannerUrl: "",
       tags: tags
         .split(",")
         .map((t) => t.trim())
@@ -363,63 +358,6 @@ export default function AddHackathonModal({
               placeholder="What are you building with your squad for this hackathon?"
               className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary transition-colors resize-none"
             />
-          </div>
-
-          {/* Firebase Storage Graphic / Banner */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-mono uppercase tracking-wider text-outline">
-                Hackathon Banner / Poster (Firebase Storage)
-              </label>
-              {uploadingBanner && (
-                <span className="text-[11px] font-mono text-primary flex items-center gap-1 animate-pulse">
-                  <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                  Uploading to Cloud...
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setUploadingBanner(true);
-                  try {
-                    const downloadUrl = await uploadHackathonBanner(
-                      initialData?.id || "hack-" + Date.now(),
-                      file
-                    );
-                    setBannerUrl(downloadUrl);
-                  } catch (err) {
-                    console.error("Banner upload error:", err);
-                  } finally {
-                    setUploadingBanner(false);
-                  }
-                }}
-                className="w-full text-xs text-outline file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-container file:text-on-primary-container hover:file:bg-primary hover:file:text-on-primary cursor-pointer transition-colors"
-              />
-
-              {bannerUrl && (
-                <div className="w-full h-24 rounded-xl overflow-hidden border border-outline-variant/30 relative group">
-                  <img
-                    src={bannerUrl}
-                    alt="Banner Preview"
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setBannerUrl("")}
-                    className="absolute top-2 right-2 p-1 rounded-md bg-background/80 hover:bg-error text-on-surface hover:text-on-error text-xs backdrop-blur-sm transition-colors cursor-pointer"
-                    title="Remove graphic"
-                  >
-                    <span className="material-symbols-outlined text-sm">close</span>
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Form Actions */}

@@ -16,7 +16,6 @@ import {
   findUserUidByEmail,
 } from "../../../lib/firebase/teams";
 import { createUserNotification } from "../../../lib/firebase/notifications";
-import { uploadTeamLogo } from "../../../lib/firebase/storage";
 import { useAuth } from "../../../lib/auth/AuthContext";
 
 interface TeamsManagerProps {
@@ -37,8 +36,6 @@ export default function TeamsManager({
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [teamDesc, setTeamDesc] = useState("");
-  const [teamLogoUrl, setTeamLogoUrl] = useState("");
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
@@ -127,22 +124,19 @@ export default function TeamsManager({
       const teamId = await createTeam(
         teamName.trim(),
         teamDesc.trim(),
-        user?.uid || "guest",
-        teamLogoUrl.trim() || undefined
+        user?.uid || "guest"
       );
       const newTeam: Team = {
         id: teamId,
         name: teamName.trim(),
         description: teamDesc.trim(),
         ownerUid: user?.uid || "guest",
-        logoUrl: teamLogoUrl.trim() || undefined,
       };
       onTeamCreated(newTeam);
       setActiveTeam(newTeam);
       setShowCreateModal(false);
       setTeamName("");
       setTeamDesc("");
-      setTeamLogoUrl("");
     } catch {
       // Fallback local team creation
       const localTeam: Team = {
@@ -150,14 +144,12 @@ export default function TeamsManager({
         name: teamName.trim(),
         description: teamDesc.trim(),
         ownerUid: user?.uid || "guest",
-        logoUrl: teamLogoUrl.trim() || undefined,
       };
       onTeamCreated(localTeam);
       setActiveTeam(localTeam);
       setShowCreateModal(false);
       setTeamName("");
       setTeamDesc("");
-      setTeamLogoUrl("");
     }
   };
 
@@ -612,44 +604,6 @@ export default function TeamsManager({
                   placeholder="What is your squad focusing on?"
                   className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-primary resize-none"
                 />
-              </div>
-
-              {/* Firebase Storage Squad Logo */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-mono uppercase text-outline">
-                    Squad Logo / Emblem (Firebase Storage)
-                  </label>
-                  {uploadingLogo && (
-                    <span className="text-[10px] font-mono text-primary animate-pulse flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>
-                      Uploading...
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setUploadingLogo(true);
-                    try {
-                      const downloadUrl = await uploadTeamLogo("temp-" + Date.now(), file);
-                      setTeamLogoUrl(downloadUrl);
-                    } catch (err) {
-                      console.error("Team logo upload failed:", err);
-                    } finally {
-                      setUploadingLogo(false);
-                    }
-                  }}
-                  className="w-full text-xs text-outline file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-container file:text-on-primary-container cursor-pointer transition-colors"
-                />
-                {teamLogoUrl && (
-                  <div className="mt-2 w-12 h-12 rounded-xl overflow-hidden border border-primary/40">
-                    <img src={teamLogoUrl} alt="Logo" className="w-full h-full object-cover" />
-                  </div>
-                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">

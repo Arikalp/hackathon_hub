@@ -290,16 +290,6 @@ export default function WorkspaceContent({
                 ></div>
 
                 <div className="flex flex-col gap-4">
-                  {hackathon.bannerUrl && (
-                    <div className="w-full h-36 rounded-xl overflow-hidden border border-outline-variant/30">
-                      <img
-                        src={hackathon.bannerUrl}
-                        alt={hackathon.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex flex-col gap-1">
                       <div className="flex flex-wrap items-center gap-2">
